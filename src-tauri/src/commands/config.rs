@@ -3,26 +3,17 @@ use std::fs;
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct AppConfig {
     pub steam_path: String,
-    pub theme: String,
-    pub auto_restart_steam: bool,
-    pub export_path: String,
+    pub veil_enabled: bool,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        let export_path = dirs::document_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("Veil Exports")
-            .to_string_lossy()
-            .to_string();
-
         Self {
             steam_path: String::new(),
-            theme: "dark".to_string(),
-            auto_restart_steam: true,
-            export_path,
+            veil_enabled: true,
         }
     }
 }

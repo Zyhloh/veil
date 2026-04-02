@@ -1,106 +1,117 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { invoke } from '@tauri-apps/api/core'
-import { FolderOpen, RotateCcw, Download } from 'lucide-react'
+import { FolderOpen } from 'lucide-react'
 
 interface AppConfig {
   steam_path: string
-  theme: string
-  auto_restart_steam: boolean
-  export_path: string
+  veil_enabled: boolean
 }
+
+const EASE = [0.25, 0.46, 0.45, 0.94] as const
 
 function SettingsPage() {
   const [config, setConfig] = useState<AppConfig | null>(null)
-  const [steamPath, setSteamPath] = useState('')
+  const [dllStatus, setDllStatus] = useState('')
 
   useEffect(() => {
-    invoke<AppConfig>('get_app_config').then((cfg) => {
-      setConfig(cfg)
-    }).catch(() => {})
-
-    invoke<string>('get_steam_path').then((path) => {
-      setSteamPath(path)
-    }).catch(() => setSteamPath('Not detected'))
+    async function load() {
+      try {
+        const cfg = await invoke<AppConfig>('get_app_config')
+        if (!cfg.steam_path) {
+          try {
+            const detected = await invoke<string>('get_steam_path')
+            cfg.steam_path = detected
+            await invoke('save_app_config', { config: cfg })
+          } catch {}
+        }
+        setConfig(cfg)
+      } catch {}
+    }
+    load()
   }, [])
 
+  const toggleVeil = async () => {
+    if (!config) return
+    const newEnabled = !config.veil_enabled
+    const updated = { ...config, veil_enabled: newEnabled }
+    setConfig(updated)
+    await invoke('save_app_config', { config: updated }).catch(() => {})
+
+    if (newEnabled && config.steam_path) {
+      setDllStatus('Installing...')
+      try {
+        const result = await invoke<string>('ensure_veil_dll', { steamPath: config.steam_path })
+        setDllStatus(result === 'already_installed' ? '' : 'Installed')
+        setTimeout(() => setDllStatus(''), 2000)
+      } catch (e) {
+        setDllStatus('Error')
+      }
+    } else if (!newEnabled && config.steam_path) {
+      setDllStatus('Removing...')
+      try {
+        await invoke<string>('remove_veil_dll', { steamPath: config.steam_path })
+        setDllStatus('Removed')
+        setTimeout(() => setDllStatus(''), 2000)
+      } catch (e) {
+        setDllStatus('Error')
+      }
+    }
+  }
+
   return (
-    <div className="h-full flex flex-col gap-5">
-      <div>
-        <h1 className="text-lg font-semibold text-text-primary">Settings</h1>
-        <p className="text-text-muted text-xs mt-1">
+    <div className="h-full flex flex-col">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: EASE }}
+        className="mb-6"
+      >
+        <h1 className="text-white font-bold tracking-[-0.03em] text-[22px]">Settings</h1>
+        <p className="mt-1 text-[13px] font-medium tracking-[-0.01em] text-white/30">
           Configure Veil and manage Steam
         </p>
-      </div>
+      </motion.div>
 
       <motion.div
-        initial={{ opacity: 0, y: 15 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-3 overflow-y-auto"
+        transition={{ duration: 0.5, delay: 0.1, ease: EASE }}
+        className="flex flex-col gap-4 overflow-y-auto"
       >
-        <div className="bg-bg-secondary rounded-lg border border-border p-4">
-          <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Steam</h2>
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-text-primary">Steam Path</p>
-                <p className="text-xs text-text-muted mt-0.5 font-mono">{steamPath || 'Detecting...'}</p>
-              </div>
-              <button className="p-2 rounded-md bg-bg-tertiary hover:bg-bg-hover border border-border transition-colors duration-100">
-                <FolderOpen size={14} className="text-text-muted" />
-              </button>
-            </div>
-            <div className="h-px bg-border" />
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-text-primary">Auto-restart Steam</p>
-                <p className="text-xs text-text-muted mt-0.5">Restart Steam after installing manifests</p>
-              </div>
-              <button
-                onClick={() => {
-                  if (config) {
-                    const updated = { ...config, auto_restart_steam: !config.auto_restart_steam }
-                    setConfig(updated)
-                    invoke('save_app_config', { config: updated }).catch(() => {})
-                  }
-                }}
-                className={`w-9 h-5 rounded-full transition-colors duration-200 flex items-center ${
-                  config?.auto_restart_steam ? 'bg-white' : 'bg-accent-subtle'
-                }`}
-              >
-                <div
-                  className={`w-3.5 h-3.5 rounded-full transition-all duration-200 mx-0.5 ${
-                    config?.auto_restart_steam ? 'translate-x-4 bg-bg-primary' : 'translate-x-0 bg-text-muted'
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-bg-secondary rounded-lg border border-border p-4">
-          <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Tools</h2>
-          <div className="flex gap-2">
-            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-bg-tertiary hover:bg-bg-hover border border-border rounded-md transition-colors duration-100 text-xs text-text-secondary">
-              <RotateCcw size={13} />
-              Downgrade Steam
-            </button>
-            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-bg-tertiary hover:bg-bg-hover border border-border rounded-md transition-colors duration-100 text-xs text-text-secondary">
-              <Download size={13} />
-              Install Resources
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-bg-secondary rounded-lg border border-border p-4">
-          <h2 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Export</h2>
+        <div className="veil-card rounded-2xl p-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-white/25 mb-4">Veil</p>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-text-primary">Export Path</p>
-              <p className="text-xs text-text-muted mt-0.5 font-mono">{config?.export_path || 'Not set'}</p>
+              <p className="text-[13px] text-white/90 font-medium">Enable Veil</p>
+              <p className="text-[11px] text-white/30 mt-1">
+                {dllStatus || 'Injects dwmapi.dll into Steam for manifest loading'}
+              </p>
             </div>
-            <button className="p-2 rounded-md bg-bg-tertiary hover:bg-bg-hover border border-border transition-colors duration-100">
-              <FolderOpen size={14} className="text-text-muted" />
+            <button
+              onClick={toggleVeil}
+              className={`w-[38px] h-[22px] rounded-full transition-all duration-200 flex items-center px-[3px] ${
+                config?.veil_enabled ? 'veil-toggle-on' : 'veil-toggle-off'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full transition-all duration-200 ${
+                  config?.veil_enabled ? 'translate-x-[14px] bg-black' : 'translate-x-0 bg-white/40'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        <div className="veil-card rounded-2xl p-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-white/25 mb-4">Steam</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[13px] text-white/90 font-medium">Steam Path</p>
+              <p className="text-[11px] text-white/30 mt-1 font-mono">{config?.steam_path || 'Detecting...'}</p>
+            </div>
+            <button className="veil-btn p-2.5 rounded-xl">
+              <FolderOpen size={14} strokeWidth={1.5} className="text-white/40" />
             </button>
           </div>
         </div>

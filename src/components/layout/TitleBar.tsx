@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { Minus, Square, X } from 'lucide-react'
+import { Minus, Copy, X } from 'lucide-react'
 
 function TitleBar() {
   const handleMinimize = useCallback(async () => {
@@ -21,31 +21,33 @@ function TitleBar() {
   return (
     <div
       data-tauri-drag-region
-      className="flex items-center justify-between h-8 bg-bg-secondary border-b border-border select-none shrink-0"
+      className="veil-titlebar flex items-center justify-between h-[36px] select-none shrink-0 relative z-50"
     >
-      <div data-tauri-drag-region className="flex items-center gap-2.5 px-4 h-full">
-        <span className="text-text-primary font-semibold text-xs tracking-widest uppercase">Veil</span>
-        <span className="text-text-muted text-[10px] font-mono">1.0.0</span>
+      <div data-tauri-drag-region className="flex items-center gap-3 px-4 h-full">
+        <div className="flex items-center gap-2">
+          <span className="text-white font-bold text-[13px] tracking-tight">Veil</span>
+          <span className="text-white/20 text-[10px] font-medium">v1.0.0</span>
+        </div>
       </div>
 
       <div className="flex h-full">
         <button
           onClick={handleMinimize}
-          className="h-full w-11 flex items-center justify-center hover:bg-bg-hover transition-colors duration-100"
+          className="h-full w-[46px] flex items-center justify-center hover:bg-[#1a1a1f] transition-colors duration-75 active:bg-[#222228]"
         >
-          <Minus size={14} className="text-text-muted" />
+          <Minus size={15} strokeWidth={1.5} className="text-white/30" />
         </button>
         <button
           onClick={handleMaximize}
-          className="h-full w-11 flex items-center justify-center hover:bg-bg-hover transition-colors duration-100"
+          className="h-full w-[46px] flex items-center justify-center hover:bg-[#1a1a1f] transition-colors duration-75 active:bg-[#222228]"
         >
-          <Square size={11} className="text-text-muted" />
+          <Copy size={12} strokeWidth={1.5} className="text-white/30" />
         </button>
         <button
           onClick={handleClose}
-          className="h-full w-11 flex items-center justify-center hover:bg-danger transition-colors duration-100 group"
+          className="h-full w-[46px] flex items-center justify-center hover:bg-[#c42b1c] transition-colors duration-75 group"
         >
-          <X size={14} className="text-text-muted group-hover:text-white" />
+          <X size={15} strokeWidth={1.5} className="text-white/30 group-hover:text-white" />
         </button>
       </div>
     </div>
