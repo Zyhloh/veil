@@ -36,6 +36,7 @@ pub fn run() {
             commands::get_app_config,
             commands::save_app_config,
             commands::ensure_veil_dll,
+            commands::verify_veil_dll,
             commands::remove_veil_dll,
             commands::install_manifest_paths,
             commands::list_installed_games,

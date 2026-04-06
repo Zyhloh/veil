@@ -1,58 +1,213 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 use sha2::{Sha256, Digest};
+use winreg::enums::*;
+use winreg::RegKey;
 
-const BUNDLED_DLL: &[u8] = include_bytes!("../../resources/dwmapi.dll");
+const BUNDLED_DWMAPI: &[u8] = include_bytes!("../../resources/dwmapi.dll");
+const BUNDLED_XINPUT: &[u8] = include_bytes!("../../resources/xinput1_4.dll");
+const BUNDLED_PACKCODE: &[u8] = include_bytes!("../../resources/packcode.vdf");
+const BUNDLED_VERSION: &[u8] = include_bytes!("../../resources/version");
 
-fn dll_hash(data: &[u8]) -> String {
+fn file_hash(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
     format!("{:x}", hasher.finalize())
 }
 
+fn bundled_dwmapi_hash() -> &'static str {
+    static H: OnceLock<String> = OnceLock::new();
+    H.get_or_init(|| file_hash(BUNDLED_DWMAPI))
+}
+fn bundled_xinput_hash() -> &'static str {
+    static H: OnceLock<String> = OnceLock::new();
+    H.get_or_init(|| file_hash(BUNDLED_XINPUT))
+}
+fn bundled_packcode_hash() -> &'static str {
+    static H: OnceLock<String> = OnceLock::new();
+    H.get_or_init(|| file_hash(BUNDLED_PACKCODE))
+}
+fn bundled_version_hash() -> &'static str {
+    static H: OnceLock<String> = OnceLock::new();
+    H.get_or_init(|| file_hash(BUNDLED_VERSION))
+}
+
+struct VeilFile {
+    path: PathBuf,
+    data: &'static [u8],
+    expected_hash: &'static str,
+}
+
+fn veil_files(steam_path: &str) -> [VeilFile; 4] {
+    let steam = Path::new(steam_path);
+    let appcache = steam.join("appcache");
+    [
+        VeilFile { path: steam.join("dwmapi.dll"),    data: BUNDLED_DWMAPI,   expected_hash: bundled_dwmapi_hash() },
+        VeilFile { path: steam.join("xinput1_4.dll"), data: BUNDLED_XINPUT,   expected_hash: bundled_xinput_hash() },
+        VeilFile { path: appcache.join("packcode.vdf"), data: BUNDLED_PACKCODE, expected_hash: bundled_packcode_hash() },
+        VeilFile { path: appcache.join("version"),      data: BUNDLED_VERSION,  expected_hash: bundled_version_hash() },
+    ]
+}
+
+/// Returns (missing_or_wrong, missing_count, wrong_hash_count)
+fn audit_files(files: &[VeilFile]) -> (Vec<&Path>, u32, u32) {
+    let mut bad = Vec::new();
+    let mut missing = 0u32;
+    let mut wrong = 0u32;
+    for f in files {
+        if !f.path.exists() {
+            missing += 1;
+            bad.push(f.path.as_path());
+            continue;
+        }
+        match fs::read(&f.path) {
+            Ok(d) => {
+                if file_hash(&d) != f.expected_hash {
+                    wrong += 1;
+                    bad.push(f.path.as_path());
+                }
+            }
+            Err(_) => {
+                wrong += 1;
+                bad.push(f.path.as_path());
+            }
+        }
+    }
+    (bad, missing, wrong)
+}
+
+fn write_file(path: &Path, data: &[u8]) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create {}: {}", parent.display(), e))?;
+    }
+    fs::write(path, data).map_err(|e| format!("Failed to write {}: {}", path.display(), e))
+}
+
+fn set_unlock_registry() -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu.create_subkey("Software\\Valve\\Steamtools")
+        .map_err(|e| format!("Failed to create registry key: {}", e))?;
+    key.set_value("ActivateUnlockMode", &"true")
+        .map_err(|e| format!("Failed to set ActivateUnlockMode: {}", e))?;
+    Ok(())
+}
+
+fn remove_unlock_registry() -> Result<(), String> {
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let _ = hkcu.delete_subkey_all("Software\\Valve\\Steamtools");
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct VerifyResult {
+    pub ok: bool,
+    pub missing: u32,
+    pub wrong_hash: u32,
+    pub steam_running: bool,
+}
+
+/// Read-only check. Cheap enough to call on a few-second interval.
+#[tauri::command]
+pub fn verify_veil_dll(steam_path: String) -> Result<VerifyResult, String> {
+    let files = veil_files(&steam_path);
+    let (bad, missing, wrong_hash) = audit_files(&files);
+    Ok(VerifyResult {
+        ok: bad.is_empty(),
+        missing,
+        wrong_hash,
+        steam_running: is_steam_process_running(),
+    })
+}
+
 #[tauri::command]
 pub fn ensure_veil_dll(steam_path: String) -> Result<String, String> {
-    let dll_dest = Path::new(&steam_path).join("dwmapi.dll");
-    let expected_hash = dll_hash(BUNDLED_DLL);
+    let files = veil_files(&steam_path);
+    let (bad, _missing, _wrong) = audit_files(&files);
 
-    if dll_dest.exists() {
-        let existing = fs::read(&dll_dest).map_err(|e| e.to_string())?;
-        if dll_hash(&existing) == expected_hash {
-            return Ok("already_installed".to_string());
+    if bad.is_empty() {
+        // Always reassert registry — cheap and self-healing if a user clears it.
+        set_unlock_registry()?;
+        return Ok("already_installed".to_string());
+    }
+
+    // Steam holds locks on dwmapi.dll / xinput1_4.dll while running, so we
+    // must stop it before rewriting any of those files.
+    let killed_steam = if is_steam_process_running() {
+        kill_steam_processes();
+        // Give Windows a moment to release file handles.
+        for _ in 0..10 {
+            if !is_steam_process_running() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        true
+    } else {
+        false
+    };
+
+    // Rewrite ONLY the files that are missing or wrong, but always re-verify
+    // every file's hash before declaring success.
+    for f in &files {
+        let needs_write = !f.path.exists() || fs::read(&f.path)
+            .map(|d| file_hash(&d) != f.expected_hash)
+            .unwrap_or(true);
+        if needs_write {
+            write_file(&f.path, f.data)?;
+        }
+    }
+
+    // Post-write verification — if anything still doesn't match, fail loudly.
+    let (still_bad, _, _) = audit_files(&files);
+    if !still_bad.is_empty() {
+        return Err(format!(
+            "Veil files failed post-write verification: {}",
+            still_bad.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")
+        ));
+    }
+
+    set_unlock_registry()?;
+
+    Ok(if killed_steam { "repaired".to_string() } else { "installed".to_string() })
+}
+
+#[tauri::command]
+pub fn remove_veil_dll(steam_path: String) -> Result<String, String> {
+    let files = veil_files(&steam_path);
+
+    let any_present = files.iter().any(|f| f.path.exists());
+    if !any_present {
+        remove_unlock_registry()?;
+        return Ok("not_installed".to_string());
+    }
+
+    // Refuse to remove a dwmapi.dll we don't recognise — it might be the
+    // user's own / a different mod.
+    let dwmapi = &files[0];
+    if dwmapi.path.exists() {
+        let existing = fs::read(&dwmapi.path).map_err(|e| e.to_string())?;
+        if file_hash(&existing) != dwmapi.expected_hash {
+            return Ok("not_ours".to_string());
         }
     }
 
     if is_steam_process_running() {
         kill_steam_processes();
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        for _ in 0..10 {
+            if !is_steam_process_running() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
     }
 
-    fs::write(&dll_dest, BUNDLED_DLL).map_err(|e| format!("Failed to write dwmapi.dll: {}", e))?;
-
-    Ok("installed".to_string())
-}
-
-#[tauri::command]
-pub fn remove_veil_dll(steam_path: String) -> Result<String, String> {
-    let dll_dest = Path::new(&steam_path).join("dwmapi.dll");
-
-    if !dll_dest.exists() {
-        return Ok("not_installed".to_string());
+    for f in &files {
+        if f.path.exists() {
+            let _ = fs::remove_file(&f.path);
+        }
     }
 
-    let expected_hash = dll_hash(BUNDLED_DLL);
-    let existing = fs::read(&dll_dest).map_err(|e| e.to_string())?;
-    if dll_hash(&existing) != expected_hash {
-        return Ok("not_ours".to_string());
-    }
-
-    if is_steam_process_running() {
-        kill_steam_processes();
-        std::thread::sleep(std::time::Duration::from_secs(2));
-    }
-
-    fs::remove_file(&dll_dest).map_err(|e| format!("Failed to remove dwmapi.dll: {}", e))?;
+    remove_unlock_registry()?;
 
     Ok("removed".to_string())
 }
