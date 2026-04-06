@@ -26,7 +26,7 @@ function TitleBar() {
       <div data-tauri-drag-region className="flex items-center gap-3 px-4 h-full">
         <div className="flex items-center gap-2">
           <span className="text-white font-bold text-[13px] tracking-tight">Veil</span>
-          <span className="text-white/20 text-[10px] font-medium">v1.0.0</span>
+          <span className="text-white/20 text-[10px] font-medium">v1.0.4</span>
         </div>
       </div>
 

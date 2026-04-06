@@ -1,6 +1,6 @@
 [package]
 name = "veil"
-version = "1.0.3"
+version = "1.0.4"
 description = "The Next Generation Steam Manifest Installer"
 authors = ["Zyhloh"]
 license = "MIT"

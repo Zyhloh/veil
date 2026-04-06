@@ -43,6 +43,8 @@ pub fn run() {
             commands::uninstall_game,
             commands::fix_manifests_for_app,
             commands::fix_all_manifests,
+            commands::check_for_update,
+            commands::download_and_run_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

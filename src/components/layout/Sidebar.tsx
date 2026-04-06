@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Download, Library, Settings } from 'lucide-react'
+import { useUpdate } from '../../hooks/useUpdate'
 
 const navItems = [
   { path: '/install', label: 'Install', icon: Download },
@@ -13,10 +14,13 @@ const bottomItems = [
 function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { info } = useUpdate()
+  const updateAvailable = !!info?.available
 
   const renderItem = (item: typeof navItems[0]) => {
     const isActive = location.pathname === item.path
     const Icon = item.icon
+    const showDot = item.path === '/settings' && updateAvailable
 
     return (
       <button
@@ -26,13 +30,23 @@ function Sidebar() {
           isActive ? 'veil-nav-active text-white' : 'veil-nav-item text-white/60 hover:text-white'
         }`}
       >
-        <Icon
-          size={16}
-          strokeWidth={isActive ? 2 : 1.5}
-        />
+        <div className="relative">
+          <Icon
+            size={16}
+            strokeWidth={isActive ? 2 : 1.5}
+          />
+          {showDot && (
+            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-[#0a0a0a]" />
+          )}
+        </div>
         <span>
           {item.label}
         </span>
+        {showDot && (
+          <span className="ml-auto text-[10px] font-semibold uppercase tracking-wider text-emerald-400/90">
+            Update
+          </span>
+        )}
       </button>
     )
   }

@@ -7,8 +7,9 @@ import InstallPage from './pages/InstallPage'
 import LibraryPage from './pages/LibraryPage'
 import SettingsPage from './pages/SettingsPage'
 import { useAppInit } from './hooks/useAppInit'
+import { UpdateProvider } from './hooks/useUpdate'
 
-function App() {
+function AppInner() {
   const { showRestartModal, setShowRestartModal } = useAppInit()
 
   return (
@@ -70,6 +71,14 @@ function App() {
         )}
       </AnimatePresence>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <UpdateProvider>
+      <AppInner />
+    </UpdateProvider>
   )
 }
 
