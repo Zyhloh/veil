@@ -1,7 +1,21 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::sync::OnceLock;
+
+// Windows CREATE_NO_WINDOW — keeps tasklist/taskkill from flashing a console
+// window every time the watchdog ticks.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+fn silent_command(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
 use sha2::{Sha256, Digest};
 use winreg::enums::*;
 use winreg::RegKey;
@@ -370,7 +384,7 @@ fn remove_matching_files(dir: &Path, pattern: &str) -> Result<(), String> {
 }
 
 fn is_steam_process_running() -> bool {
-    let output = Command::new("tasklist")
+    let output = silent_command("tasklist")
         .args(["/FI", "IMAGENAME eq steam.exe"])
         .output();
     match output {
@@ -380,8 +394,8 @@ fn is_steam_process_running() -> bool {
 }
 
 fn kill_steam_processes() {
-    let _ = Command::new("taskkill").args(["/F", "/IM", "steam.exe"]).output();
-    let _ = Command::new("taskkill").args(["/F", "/IM", "steamwebhelper.exe"]).output();
+    let _ = silent_command("taskkill").args(["/F", "/IM", "steam.exe"]).output();
+    let _ = silent_command("taskkill").args(["/F", "/IM", "steamwebhelper.exe"]).output();
 }
 
 #[derive(serde::Serialize)]
