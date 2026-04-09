@@ -129,6 +129,28 @@ html, body, #root {
   transform: scale(0.97);
 }
 
+.veil-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.veil-input:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.veil-input:focus {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.veil-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .veil-nav-item {
   border: 1px solid transparent;
   box-shadow: inset 0 1px 1px transparent;
@@ -165,8 +187,131 @@ html, body, #root {
   border: 1px solid rgba(255, 255, 255, 0.95);
 }
 
+/* iOS 26-style heavy glass surface */
+.veil-glass {
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.07) 0%,
+    rgba(255, 255, 255, 0.02) 45%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.03),
+    0 32px 80px -24px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.veil-glass-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.2);
+  transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.veil-glass-input:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.veil-glass-input:focus-within {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    0 0 0 4px rgba(255, 255, 255, 0.04);
+}
+
+/* Game card with cover art */
+.veil-game-card {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
+    0 8px 24px -8px rgba(0, 0, 0, 0.4);
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.veil-game-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-3px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    0 24px 56px -16px rgba(0, 0, 0, 0.6),
+    0 0 48px rgba(255, 255, 255, 0.04);
+}
+
+.veil-game-card .game-art {
+  transition: transform 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.veil-game-card:hover .game-art {
+  transform: scale(1.06);
+}
+
+.veil-game-card.is-dumping {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+    0 0 56px rgba(255, 255, 255, 0.06);
+}
+
+/* Soft monochrome glow background */
+.veil-aurora {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 25% 30%, rgba(255, 255, 255, 0.05), transparent 45%),
+    radial-gradient(circle at 75% 70%, rgba(255, 255, 255, 0.035), transparent 45%);
+  filter: blur(60px);
+  opacity: 0.8;
+  animation: aurora-drift 22s ease-in-out infinite;
+}
+
+@keyframes aurora-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(2%, -3%) scale(1.04); }
+  66% { transform: translate(-3%, 2%) scale(0.97); }
+}
+
+/* Soft pulse for waiting states */
+@keyframes veil-pulse-soft {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+
+.veil-pulse {
+  animation: veil-pulse-soft 2.4s ease-in-out infinite;
+}
+
+/* Shimmer skeleton for loading game art */
+@keyframes veil-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.veil-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  background-size: 200% 100%;
+  animation: veil-shimmer 1.6s linear infinite;
+}
+
 ::-webkit-scrollbar {
-  width: 3px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -174,12 +319,16 @@ html, body, #root {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+  background-clip: padding-box;
+  border: 2px solid transparent;
 }
 
 button, [role="button"] {

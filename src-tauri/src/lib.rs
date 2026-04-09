@@ -33,6 +33,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_steam_path,
             commands::check_steam_running,
+            commands::start_steam,
+            commands::kill_steam,
+            commands::restart_steam,
             commands::get_app_config,
             commands::save_app_config,
             commands::ensure_veil_dll,
@@ -45,6 +48,14 @@ pub fn run() {
             commands::fix_all_manifests,
             commands::check_for_update,
             commands::download_and_run_update,
+            commands::dumper_login,
+            commands::dumper_submit_guard,
+            commands::dumper_status,
+            commands::dumper_logout,
+            commands::dumper_owned_games,
+            commands::dumper_dump_app,
+            commands::dumper_get_profile,
+            commands::dumper_shutdown,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

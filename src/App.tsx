@@ -5,6 +5,7 @@ import TitleBar from './components/layout/TitleBar'
 import Sidebar from './components/layout/Sidebar'
 import InstallPage from './pages/InstallPage'
 import LibraryPage from './pages/LibraryPage'
+import DumperPage from './pages/DumperPage'
 import SettingsPage from './pages/SettingsPage'
 import { useAppInit } from './hooks/useAppInit'
 import { UpdateProvider } from './hooks/useUpdate'
@@ -22,6 +23,7 @@ function AppInner() {
             <Route path="/" element={<Navigate to="/install" replace />} />
             <Route path="/install" element={<InstallPage />} />
             <Route path="/library" element={<LibraryPage />} />
+            <Route path="/dumper" element={<DumperPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
@@ -33,15 +35,26 @@ function AppInner() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             className="fixed inset-0 z-50 flex items-center justify-center"
-            style={{ background: 'rgba(0,0,0,0.6)' }}
+            style={{
+              background: 'rgba(0,0,0,0.72)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+            }}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              initial={{ opacity: 0, scale: 0.94, y: 14 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 12 }}
-              transition={{ duration: 0.2 }}
-              className="veil-card rounded-2xl p-6 max-w-sm w-full mx-4 relative"
+              exit={{ opacity: 0, scale: 0.94, y: 14 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 30, mass: 0.8 }}
+              className="rounded-2xl p-6 max-w-sm w-full mx-4 relative"
+              style={{
+                background: '#0d0d10',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                boxShadow:
+                  'inset 0 1px 0 0 rgba(255,255,255,0.06), 0 32px 80px -24px rgba(0,0,0,0.8)',
+              }}
             >
               <button
                 onClick={() => setShowRestartModal(false)}

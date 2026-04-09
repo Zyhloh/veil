@@ -52,25 +52,38 @@ struct VeilFile {
     path: PathBuf,
     data: &'static [u8],
     expected_hash: &'static str,
+    // Files where Steam holds an exclusive lock while running and that Steam
+    // does NOT rewrite during normal boot. These are safe to hash-check on a
+    // tight watchdog interval. The DLLs qualify; the appcache files do not —
+    // Steam happily rewrites packcode.vdf / version on startup, and hashing
+    // them caused a kill→rewrite→popup loop on every Steam launch.
+    locked_by_steam: bool,
 }
 
 fn veil_files(steam_path: &str) -> [VeilFile; 4] {
     let steam = Path::new(steam_path);
     let appcache = steam.join("appcache");
     [
-        VeilFile { path: steam.join("dwmapi.dll"),    data: BUNDLED_DWMAPI,   expected_hash: bundled_dwmapi_hash() },
-        VeilFile { path: steam.join("xinput1_4.dll"), data: BUNDLED_XINPUT,   expected_hash: bundled_xinput_hash() },
-        VeilFile { path: appcache.join("packcode.vdf"), data: BUNDLED_PACKCODE, expected_hash: bundled_packcode_hash() },
-        VeilFile { path: appcache.join("version"),      data: BUNDLED_VERSION,  expected_hash: bundled_version_hash() },
+        VeilFile { path: steam.join("dwmapi.dll"),    data: BUNDLED_DWMAPI,   expected_hash: bundled_dwmapi_hash(),   locked_by_steam: true },
+        VeilFile { path: steam.join("xinput1_4.dll"), data: BUNDLED_XINPUT,   expected_hash: bundled_xinput_hash(),   locked_by_steam: true },
+        VeilFile { path: appcache.join("packcode.vdf"), data: BUNDLED_PACKCODE, expected_hash: bundled_packcode_hash(), locked_by_steam: false },
+        VeilFile { path: appcache.join("version"),      data: BUNDLED_VERSION,  expected_hash: bundled_version_hash(),  locked_by_steam: false },
     ]
 }
 
-/// Returns (missing_or_wrong, missing_count, wrong_hash_count)
-fn audit_files(files: &[VeilFile]) -> (Vec<&Path>, u32, u32) {
+/// Watchdog audit — ONLY hash-checks the DLLs Steam holds locked during
+/// runtime. Returns (bad_paths, missing_count, wrong_hash_count).
+///
+/// Anything Steam mutates on its own (appcache/*) is excluded entirely so the
+/// watchdog never gets into a fight with Steam over file contents.
+fn audit_watchdog(files: &[VeilFile]) -> (Vec<&Path>, u32, u32) {
     let mut bad = Vec::new();
     let mut missing = 0u32;
     let mut wrong = 0u32;
     for f in files {
+        if !f.locked_by_steam {
+            continue;
+        }
         if !f.path.exists() {
             missing += 1;
             bad.push(f.path.as_path());
@@ -123,10 +136,13 @@ pub struct VerifyResult {
 }
 
 /// Read-only check. Cheap enough to call on a few-second interval.
+///
+/// Only reports problems with the DLLs Steam locks at runtime — appcache
+/// files are intentionally ignored here because Steam mutates them itself.
 #[tauri::command]
 pub fn verify_veil_dll(steam_path: String) -> Result<VerifyResult, String> {
     let files = veil_files(&steam_path);
-    let (bad, missing, wrong_hash) = audit_files(&files);
+    let (bad, missing, wrong_hash) = audit_watchdog(&files);
     Ok(VerifyResult {
         ok: bad.is_empty(),
         missing,
@@ -138,19 +154,30 @@ pub fn verify_veil_dll(steam_path: String) -> Result<VerifyResult, String> {
 #[tauri::command]
 pub fn ensure_veil_dll(steam_path: String) -> Result<String, String> {
     let files = veil_files(&steam_path);
-    let (bad, _missing, _wrong) = audit_files(&files);
 
-    if bad.is_empty() {
+    // Watchdog files = DLLs. If these are all good, the install is healthy
+    // regardless of what Steam has done to its own appcache.
+    let (bad_watchdog, _, _) = audit_watchdog(&files);
+
+    // Appcache files: only consider them "needs install" if MISSING. We never
+    // overwrite them based on hash because Steam will rewrite them itself
+    // during normal boot, and fighting that causes the popup-spam loop.
+    let appcache_missing: Vec<&VeilFile> = files
+        .iter()
+        .filter(|f| !f.locked_by_steam && !f.path.exists())
+        .collect();
+
+    if bad_watchdog.is_empty() && appcache_missing.is_empty() {
         // Always reassert registry — cheap and self-healing if a user clears it.
         set_unlock_registry()?;
         return Ok("already_installed".to_string());
     }
 
-    // Steam holds locks on dwmapi.dll / xinput1_4.dll while running, so we
-    // must stop it before rewriting any of those files.
-    let killed_steam = if is_steam_process_running() {
+    // Only kill Steam if a DLL needs rewriting (Steam holds locks on those).
+    // Writing into appcache while Steam runs is fine — Steam may overwrite it
+    // again, but we wouldn't be hash-checking it again so we won't loop.
+    let killed_steam = if !bad_watchdog.is_empty() && is_steam_process_running() {
         kill_steam_processes();
-        // Give Windows a moment to release file handles.
         for _ in 0..10 {
             if !is_steam_process_running() { break; }
             std::thread::sleep(std::time::Duration::from_millis(300));
@@ -161,9 +188,8 @@ pub fn ensure_veil_dll(steam_path: String) -> Result<String, String> {
         false
     };
 
-    // Rewrite ONLY the files that are missing or wrong, but always re-verify
-    // every file's hash before declaring success.
-    for f in &files {
+    // Rewrite watchdog files (DLLs) if missing or wrong.
+    for f in files.iter().filter(|f| f.locked_by_steam) {
         let needs_write = !f.path.exists() || fs::read(&f.path)
             .map(|d| file_hash(&d) != f.expected_hash)
             .unwrap_or(true);
@@ -172,18 +198,33 @@ pub fn ensure_veil_dll(steam_path: String) -> Result<String, String> {
         }
     }
 
-    // Post-write verification — if anything still doesn't match, fail loudly.
-    let (still_bad, _, _) = audit_files(&files);
+    // Write appcache files only if they're MISSING — don't ever overwrite an
+    // existing appcache file based on hash.
+    for f in appcache_missing {
+        write_file(&f.path, f.data)?;
+    }
+
+    // Post-write verification only on watchdog files.
+    let (still_bad, _, _) = audit_watchdog(&files);
     if !still_bad.is_empty() {
         return Err(format!(
-            "Veil files failed post-write verification: {}",
+            "Veil DLLs failed post-write verification: {}",
             still_bad.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ")
         ));
     }
 
     set_unlock_registry()?;
 
-    Ok(if killed_steam { "repaired".to_string() } else { "installed".to_string() })
+    // Only return "repaired" / "installed" (which triggers the popup) if we
+    // actually had to kill Steam to do it. A silent first-time appcache
+    // priming should not nag the user to restart.
+    if killed_steam {
+        Ok("repaired".to_string())
+    } else if !bad_watchdog.is_empty() {
+        Ok("installed".to_string())
+    } else {
+        Ok("already_installed".to_string())
+    }
 }
 
 #[tauri::command]
