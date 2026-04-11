@@ -4,8 +4,10 @@ import { AlertTriangle, X } from 'lucide-react'
 import TitleBar from './components/layout/TitleBar'
 import Sidebar from './components/layout/Sidebar'
 import InstallPage from './pages/InstallPage'
+import CatalogPage from './pages/CatalogPage'
 import LibraryPage from './pages/LibraryPage'
 import DumperPage from './pages/DumperPage'
+import PatcherPage from './pages/PatcherPage'
 import SettingsPage from './pages/SettingsPage'
 import { useAppInit } from './hooks/useAppInit'
 import { UpdateProvider } from './hooks/useUpdate'
@@ -22,8 +24,10 @@ function AppInner() {
           <Routes>
             <Route path="/" element={<Navigate to="/install" replace />} />
             <Route path="/install" element={<InstallPage />} />
+            <Route path="/catalog" element={<CatalogPage />} />
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/dumper" element={<DumperPage />} />
+            <Route path="/patcher" element={<PatcherPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

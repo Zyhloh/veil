@@ -38,13 +38,9 @@ pub fn check_steam_running() -> bool {
     })
 }
 
-// Kill every steam-related process. Best-effort: ignores per-process failures
-// and waits briefly for the OS to release handles before returning.
 fn kill_all_steam_processes() -> Result<u32, String> {
     let s = System::new_all();
     let mut killed = 0u32;
-    // Names we want gone — Steam itself, the service, web helpers, overlay,
-    // crash handler, etc.
     let targets = [
         "steam.exe",
         "steamservice.exe",
@@ -62,7 +58,6 @@ fn kill_all_steam_processes() -> Result<u32, String> {
         }
     }
 
-    // Belt-and-suspenders: hit anything still alive with taskkill /F.
     #[cfg(windows)]
     {
         for t in targets.iter() {
@@ -73,7 +68,6 @@ fn kill_all_steam_processes() -> Result<u32, String> {
         }
     }
 
-    // Give the OS a moment to release handles so a subsequent start works.
     std::thread::sleep(std::time::Duration::from_millis(600));
     Ok(killed)
 }
@@ -116,4 +110,44 @@ pub async fn kill_steam() -> Result<u32, String> {
 pub async fn restart_steam() -> Result<(), String> {
     let _ = kill_all_steam_processes()?;
     spawn_steam()
+}
+
+#[tauri::command]
+pub async fn shutdown_steam_for_patching() -> Result<bool, String> {
+    use tokio::time::{sleep, Duration};
+
+    let was_running = check_steam_running();
+    if !was_running {
+        return Ok(false);
+    }
+
+    if let Ok(exe) = steam_exe_path() {
+        let mut cmd = Command::new(&exe);
+        cmd.arg("-shutdown");
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS);
+        }
+        let _ = cmd.spawn();
+    }
+
+    for _ in 0..40 {
+        sleep(Duration::from_millis(250)).await;
+        if !check_steam_running() {
+            sleep(Duration::from_millis(400)).await;
+            return Ok(true);
+        }
+    }
+
+    let _ = kill_all_steam_processes();
+
+    for _ in 0..20 {
+        sleep(Duration::from_millis(250)).await;
+        if !check_steam_running() {
+            sleep(Duration::from_millis(500)).await;
+            return Ok(true);
+        }
+    }
+
+    Err("Steam did not exit after shutdown + force-kill".to_string())
 }

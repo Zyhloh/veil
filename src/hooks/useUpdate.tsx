@@ -46,7 +46,6 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     setPhase('downloading')
     setError(null)
     try {
-      // Brief pause so the UI can show "downloading" before the app exits.
       await invoke<string>('download_and_run_update', { url: info.download_url })
       setPhase('launching')
     } catch (e) {
@@ -55,7 +54,6 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
     }
   }, [info])
 
-  // One automatic check on startup. Failures stay quiet — surfaces in Settings.
   useEffect(() => {
     let cancelled = false
     invoke<UpdateInfo>('check_for_update')

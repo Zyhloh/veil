@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 interface AppConfig {
   steam_path: string
   veil_enabled: boolean
+  patches_applied: boolean
 }
 
 interface VerifyResult {
@@ -13,7 +14,6 @@ interface VerifyResult {
   steam_running: boolean
 }
 
-// How often the watchdog re-checks the Veil files on disk.
 const WATCHDOG_INTERVAL_MS = 4000
 
 export function useAppInit() {
@@ -38,7 +38,7 @@ export function useAppInit() {
           }
         }
 
-        if (config.veil_enabled && config.steam_path) {
+        if (config.veil_enabled && config.steam_path && !config.patches_applied) {
           const result = await invoke<string>('ensure_veil_dll', { steamPath: config.steam_path }).catch(() => 'error')
           if (result === 'installed' || result === 'repaired') {
             setShowRestartModal(true)
@@ -47,22 +47,19 @@ export function useAppInit() {
       } catch {}
     }
 
-    // Periodic watchdog: re-reads config (so it picks up toggle changes
-    // immediately), verifies the on-disk Veil files, and self-heals if any
-    // are missing or have the wrong hash.
     async function tick() {
       if (cancelled || busy) return
       busy = true
       try {
         const config = await invoke<AppConfig>('get_app_config').catch(() => null)
         if (!config || !config.veil_enabled || !config.steam_path) return
+        if (config.patches_applied) return
 
         const status = await invoke<VerifyResult>('verify_veil_dll', {
           steamPath: config.steam_path,
         }).catch(() => null)
         if (!status || status.ok) return
 
-        // Something is missing or tampered with — repair.
         const result = await invoke<string>('ensure_veil_dll', {
           steamPath: config.steam_path,
         }).catch(() => 'error')

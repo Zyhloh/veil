@@ -36,6 +36,7 @@ pub fn run() {
             commands::start_steam,
             commands::kill_steam,
             commands::restart_steam,
+            commands::shutdown_steam_for_patching,
             commands::get_app_config,
             commands::save_app_config,
             commands::ensure_veil_dll,
@@ -56,6 +57,14 @@ pub fn run() {
             commands::dumper_dump_app,
             commands::dumper_get_profile,
             commands::dumper_shutdown,
+            commands::catalog_search,
+            commands::catalog_install_lua,
+            commands::catalog_is_installed,
+            commands::patcher_diagnose,
+            commands::patcher_apply_capcom,
+            commands::patcher_apply_offline,
+            commands::patcher_restore,
+            commands::patcher_delete_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

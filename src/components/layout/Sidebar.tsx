@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Download, Library, KeyRound, Settings, Power, RotateCw, Loader2 } from 'lucide-react'
+import { Download, Library, KeyRound, Settings, Power, RotateCw, Loader2, LayoutGrid, Wrench } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { useUpdate } from '../../hooks/useUpdate'
 
 const navItems = [
   { path: '/install', label: 'Install', icon: Download },
+  { path: '/catalog', label: 'Catalog', icon: LayoutGrid },
   { path: '/library', label: 'Library', icon: Library },
   { path: '/dumper', label: 'Dumper', icon: KeyRound },
+  { path: '/patcher', label: 'Patcher', icon: Wrench },
 ]
 
 const bottomItems = [
@@ -20,7 +22,6 @@ function Sidebar() {
   const { info } = useUpdate()
   const updateAvailable = !!info?.available
 
-  // Steam control: poll running state and gate clicks behind a busy flag.
   const [steamRunning, setSteamRunning] = useState<boolean | null>(null)
   const [steamBusy, setSteamBusy] = useState(false)
   const lastClickRef = useRef(0)
@@ -45,8 +46,6 @@ function Sidebar() {
 
   const handleSteamClick = async () => {
     if (steamBusy) return
-    // Hard debounce: ignore clicks faster than 1.2s apart so a rage-clicker
-    // can't queue up overlapping kill/start cycles.
     const now = Date.now()
     if (now - lastClickRef.current < 1200) return
     lastClickRef.current = now
@@ -58,8 +57,6 @@ function Sidebar() {
       } else {
         await invoke('start_steam')
       }
-      // Give Steam a beat to actually appear in the process list before the
-      // next poll, so the label flips immediately instead of flickering.
       setTimeout(async () => {
         try {
           const running = await invoke<boolean>('check_steam_running')

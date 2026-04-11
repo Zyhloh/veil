@@ -7,6 +7,7 @@ use std::path::PathBuf;
 pub struct AppConfig {
     pub steam_path: String,
     pub veil_enabled: bool,
+    pub patches_applied: bool,
 }
 
 impl Default for AppConfig {
@@ -14,8 +15,19 @@ impl Default for AppConfig {
         Self {
             steam_path: String::new(),
             veil_enabled: true,
+            patches_applied: false,
         }
     }
+}
+
+pub fn patches_applied() -> bool {
+    get_app_config().map(|c| c.patches_applied).unwrap_or(false)
+}
+
+pub fn set_patches_applied(v: bool) -> Result<(), String> {
+    let mut cfg = get_app_config().unwrap_or_default();
+    cfg.patches_applied = v;
+    save_app_config(cfg)
 }
 
 fn config_path() -> PathBuf {

@@ -54,8 +54,6 @@ const EASE = [0.25, 0.46, 0.45, 0.94] as const
 const SPRING = { type: 'spring' as const, stiffness: 280, damping: 28 }
 const TOKEN_KEY = 'veil.dumper.refresh_token'
 
-// ─────────── Game art (mirrors LibraryPage approach) ───────────
-
 interface GameArtInfo {
   headerUrl: string
 }
@@ -161,8 +159,6 @@ function GameArt({ appId, name }: { appId: number; name: string }) {
   )
 }
 
-// ─────────── Steam profile (fetched via Rust to avoid CORS) ───────────
-
 interface SteamProfile {
   avatar_url: string | null
   persona_name: string | null
@@ -181,8 +177,6 @@ async function fetchSteamProfile(steamId: string): Promise<SteamProfile> {
     return { avatar_url: null, persona_name: null }
   }
 }
-
-// ─────────── Page ───────────
 
 function DumperPage() {
   const [phase, setPhase] = useState<Phase>('logged-out')
@@ -203,14 +197,12 @@ function DumperPage() {
 
   const triedSilentLogin = useRef(false)
 
-  // Auto-dismiss success toast after 5s
   useEffect(() => {
     if (!lastDump) return
     const t = setTimeout(() => setLastDump(null), 5000)
     return () => clearTimeout(t)
   }, [lastDump])
 
-  // Fetch Steam profile (avatar + display name) when steamId arrives
   useEffect(() => {
     if (!steamId) {
       setProfile(null)
@@ -224,8 +216,6 @@ function DumperPage() {
       cancelled = true
     }
   }, [steamId])
-
-  // ---- helpers --------------------------------------------------------------
 
   const refreshGames = useCallback(async () => {
     setGamesLoading(true)
@@ -263,8 +253,6 @@ function DumperPage() {
     [refreshGames]
   )
 
-  // ---- silent refresh-token login on mount ---------------------------------
-
   useEffect(() => {
     if (triedSilentLogin.current) return
     triedSilentLogin.current = true
@@ -296,8 +284,6 @@ function DumperPage() {
     })()
   }, [finalizeLogin])
 
-  // ---- sidecar event listeners ---------------------------------------------
-
   useEffect(() => {
     const unlisteners: Array<Promise<() => void>> = []
 
@@ -327,8 +313,6 @@ function DumperPage() {
       unlisteners.forEach((p) => p.then((fn) => fn()))
     }
   }, [])
-
-  // ---- actions --------------------------------------------------------------
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -399,8 +383,6 @@ function DumperPage() {
     }
   }
 
-  // ---- derived --------------------------------------------------------------
-
   const filteredGames = useMemo(() => {
     if (!query) return games
     const q = query.toLowerCase()
@@ -408,8 +390,6 @@ function DumperPage() {
       (g) => g.name.toLowerCase().includes(q) || String(g.app_id).includes(q)
     )
   }, [games, query])
-
-  // ---- render ---------------------------------------------------------------
 
   const showSilentLoader = silentLogin && phase === 'logging-in'
   const showLoginForm = !showSilentLoader && (phase === 'logged-out' || phase === 'logging-in')
@@ -431,7 +411,6 @@ function DumperPage() {
       </motion.div>
 
       <AnimatePresence mode="wait">
-        {/* ─────────── SILENT LOGIN LOADER ─────────── */}
         {showSilentLoader && (
           <motion.div
             key="silent"
@@ -474,7 +453,6 @@ function DumperPage() {
           </motion.div>
         )}
 
-        {/* ─────────── SIGN-IN CARD ─────────── */}
         {showLoginForm && (
           <motion.div
             key="login"
@@ -562,7 +540,6 @@ function DumperPage() {
           </motion.div>
         )}
 
-        {/* ─────────── STEAM GUARD CODE ─────────── */}
         {phase === 'awaiting-code' && (
           <motion.div
             key="code"
@@ -634,7 +611,6 @@ function DumperPage() {
           </motion.div>
         )}
 
-        {/* ─────────── DEVICE CONFIRMATION ─────────── */}
         {phase === 'awaiting-device' && (
           <motion.div
             key="device"
@@ -681,7 +657,6 @@ function DumperPage() {
           </motion.div>
         )}
 
-        {/* ─────────── LIBRARY ─────────── */}
         {phase === 'logged-in' && (
           <motion.div
             key="library"
@@ -691,7 +666,6 @@ function DumperPage() {
             transition={{ duration: 0.4, ease: EASE }}
             className="relative flex-1 flex flex-col min-h-0 min-w-0"
           >
-            {/* Profile + search header */}
             <div className="flex items-center gap-3 mb-5 min-w-0">
               <div className="veil-glass rounded-2xl pl-2 pr-4 py-2 flex items-center gap-3 min-w-0 max-w-[240px] shrink-0">
                 <div
@@ -751,7 +725,6 @@ function DumperPage() {
               </button>
             </div>
 
-            {/* Toasts */}
             <div className="min-w-0">
               <AnimatePresence initial={false}>
                 {lastDump && (
@@ -836,7 +809,6 @@ function DumperPage() {
               </AnimatePresence>
             </div>
 
-            {/* Game grid (with edge fade masks) */}
             <div
               className="relative flex-1 min-h-0 min-w-0"
               style={{

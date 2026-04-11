@@ -104,7 +104,6 @@ pub async fn check_for_update() -> Result<UpdateInfo, String> {
         });
     }
 
-    // Prefer NSIS setup .exe; fall back to any .exe.
     let asset = release
         .assets
         .iter()
@@ -181,13 +180,10 @@ pub async fn download_and_run_update(
             .map_err(|e| format!("Failed to write installer: {}", e))?;
     }
 
-    // Spawn the installer detached. Don't pipe stdio — we want it to outlive
-    // this process and show its own UI.
     Command::new(&installer_path)
         .spawn()
         .map_err(|e| format!("Failed to launch installer: {}", e))?;
 
-    // Give the installer a beat to come up before we exit.
     std::thread::sleep(std::time::Duration::from_millis(400));
     app.exit(0);
 

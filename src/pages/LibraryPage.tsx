@@ -12,9 +12,9 @@ interface InstalledGame {
 interface GameInfo {
   name: string
   headerUrl: string
-  type: string // "Game", "DLC", "Tool", etc.
-  parentAppId: string // For DLCs, the parent game's app ID
-  dlcAppIds: string[] // For base games, list of DLC app IDs
+  type: string
+  parentAppId: string
+  dlcAppIds: string[]
 }
 
 interface GameGroup {
@@ -91,7 +91,6 @@ function groupGamesWithDlc(
   const dlcToParent = new Map<string, string>()
   const parentDlcs = new Map<string, Set<string>>()
 
-  // First pass: identify DLCs via their own parentAppId
   for (const g of games) {
     const info = infos.get(g.game_id)
     if (!info) continue
@@ -105,7 +104,6 @@ function groupGamesWithDlc(
     }
   }
 
-  // Second pass: check base games' dlcAppIds for installed DLCs not yet assigned
   for (const g of games) {
     const info = infos.get(g.game_id)
     if (!info || info.dlcAppIds.length === 0) continue
@@ -122,10 +120,9 @@ function groupGamesWithDlc(
   const groups: GameGroup[] = []
   const handled = new Set<string>()
 
-  // Build groups: base games first, then ungrouped items
   for (const g of games) {
     if (handled.has(g.game_id)) continue
-    if (dlcToParent.has(g.game_id)) continue // Skip DLCs, they'll be nested
+    if (dlcToParent.has(g.game_id)) continue
 
     const dlcIds = parentDlcs.get(g.game_id)
     const dlcs: InstalledGame[] = []
@@ -137,7 +134,6 @@ function groupGamesWithDlc(
           handled.add(dlcId)
         }
       }
-      // Sort DLCs by name
       dlcs.sort((a, b) => {
         const nameA = infos.get(a.game_id)?.name || a.game_id
         const nameB = infos.get(b.game_id)?.name || b.game_id
@@ -149,7 +145,6 @@ function groupGamesWithDlc(
     handled.add(g.game_id)
   }
 
-  // Any DLCs whose parent isn't installed get shown as standalone
   for (const g of games) {
     if (!handled.has(g.game_id)) {
       groups.push({ base: g, dlcs: [] })
@@ -251,7 +246,6 @@ function GameGroupCard({
       transition={{ delay: index * 0.04, ease: EASE }}
       className="veil-card rounded-xl overflow-hidden group"
     >
-      {/* Base game row */}
       <div
         className={`flex items-center gap-4 ${hasDlc ? 'cursor-pointer hover:bg-white/[0.02] transition-colors duration-150' : ''}`}
         onClick={() => hasDlc && setExpanded(!expanded)}
@@ -282,7 +276,6 @@ function GameGroupCard({
         )}
       </div>
 
-      {/* DLC dropdown */}
       <AnimatePresence>
         {expanded && hasDlc && (
           <motion.div

@@ -1,9 +1,3 @@
-// Steam manifest dumper — Rust side of the Node sidecar.
-//
-// The Node sidecar (`binaries/veil-dumper`) speaks line-delimited JSON over
-// stdin/stdout. This module keeps one long-lived sidecar process alive and
-// multiplexes requests onto it from Tauri commands, matching replies via
-// monotonically increasing request ids.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -105,7 +99,6 @@ fn handle_line(app: &AppHandle, line: &str) {
         }
     };
 
-    // Reply: has numeric `id`.
     if let Some(id) = value.get("id").and_then(|v| v.as_u64()) {
         let mut guard = state().lock().unwrap();
         if let Some(st) = guard.as_mut() {
@@ -126,7 +119,6 @@ fn handle_line(app: &AppHandle, line: &str) {
         }
     }
 
-    // Event: has string `event`.
     if let Some(event_name) = value.get("event").and_then(|v| v.as_str()) {
         let full = format!("dumper:{}", event_name);
         let payload = value.clone();
@@ -166,8 +158,6 @@ async fn request(app: &AppHandle, cmd: &str, extra: Value) -> Result<Value, Stri
     rx.await.map_err(|_| "Dumper reply channel closed".to_string())?
 }
 
-// -- Serializable reply structs -----------------------------------------------
-
 #[derive(Serialize)]
 pub struct LoginResult {
     pub via: String,
@@ -206,8 +196,6 @@ pub struct DumpResult {
 fn from_value<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, String> {
     serde_json::from_value(v).map_err(|e| format!("Bad dumper response: {}", e))
 }
-
-// -- Tauri commands -----------------------------------------------------------
 
 #[tauri::command]
 pub async fn dumper_login(
@@ -288,7 +276,6 @@ pub async fn dumper_dump_app(
     app_id: u32,
     output_dir: Option<String>,
 ) -> Result<DumpResult, String> {
-    // Default output: %USERPROFILE%/Documents/Veil Dumps/{app_id}
     let out_dir = match output_dir {
         Some(d) if !d.is_empty() => std::path::PathBuf::from(d),
         _ => {
@@ -310,7 +297,6 @@ pub async fn dumper_dump_app(
     .await?;
     let result: DumpResult = from_value(data)?;
 
-    // Open the folder in Explorer for the user.
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -349,8 +335,6 @@ fn extract_xml_tag(body: &str, tag: &str) -> Option<String> {
 
 #[tauri::command]
 pub async fn dumper_get_profile(steam_id: String) -> Result<SteamProfile, String> {
-    // Fetch the public Steam community profile XML and pull both avatar URL
-    // and persona/display name out. Done from Rust to avoid CORS.
     let url = format!("https://steamcommunity.com/profiles/{}?xml=1", steam_id);
     let client = reqwest::Client::builder()
         .user_agent("Veil/1.0 (+https://github.com/Zyhloh/veil)")
