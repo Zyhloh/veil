@@ -1,0 +1,37 @@
+{
+  "name": "veil-dumper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Veil Steam manifest dumper sidecar",
+  "main": "index.js",
+  "bin": "index.js",
+  "scripts": {
+    "build": "pkg . --targets node20-win-x64 --output ../../binaries/veil-dumper-x86_64-pc-windows-msvc.exe --compress GZip"
+  },
+  "dependencies": {
+    "steam-session": "^1.9.4",
+    "steam-user": "^5.3.0"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.7.0"
+  },
+  "pkg": {
+    "scripts": [
+      "index.js",
+      "node_modules/steam-user/**/*.js",
+      "node_modules/steam-session/**/*.js",
+      "node_modules/@doctormckay/**/*.js",
+      "node_modules/lzma/src/**/*.js"
+    ],
+    "assets": [
+      "node_modules/steam-user/protobufs/**/*",
+      "node_modules/steam-user/resources/**/*",
+      "node_modules/steam-user/package.json",
+      "node_modules/steam-session/protobufs/**/*",
+      "node_modules/steam-session/package.json",
+      "node_modules/@doctormckay/steam-crypto/*.pem",
+      "node_modules/lzma/src/**/*",
+      "node_modules/lzma/package.json"
+    ]
+  }
+}
