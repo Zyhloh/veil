@@ -31,13 +31,14 @@ interface ReleasedDlc {
 
 export function useReleasedDlc(appId: number, gridDlcIds: number[], enabled = true): ReleasedDlc {
   const [result, setResult] = useState<ReleasedDlc>({ dlcIds: [], metas: new Map(), loading: true })
+  const gridKey = gridDlcIds.join(',')
 
   useEffect(() => {
     if (!enabled) return
     let alive = true
     ;(async () => {
       const details = await catalogDetails(appId).catch(() => null)
-      const union = new Set<number>(gridDlcIds)
+      const union = new Set<number>(gridKey ? gridKey.split(',').map(Number) : [])
       details?.dlc_app_ids.forEach((id) => union.add(id))
       const ids = [...union]
       const metas = await getAppsMeta(ids).catch(() => [] as AppMeta[])
@@ -49,7 +50,7 @@ export function useReleasedDlc(appId: number, gridDlcIds: number[], enabled = tr
     return () => {
       alive = false
     }
-  }, [appId, gridDlcIds, enabled])
+  }, [appId, gridKey, enabled])
 
   return result
 }

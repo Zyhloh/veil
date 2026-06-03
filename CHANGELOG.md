@@ -2,6 +2,17 @@
 
 All notable changes to Veil are documented here.
 
+## 2.0.1 — 2026-06-03
+
+### Added
+
+- **Library search** — a collapsible search button in the Library toolbar that expands into a full search bar, filtering your library by name or App ID.
+- **Install All DLC** — games with DLC now have an Install All DLC button in their dropdown to add every missing DLC at once.
+
+### Fixed
+
+- Installing a single DLC from a long, expanded DLC list no longer scrolls the page back up.
+
 ## 2.0.0 — 2026-06-02
 
 Veil 2.0.0 is a complete, ground-up rewrite. The app was rebuilt on Tauri 2 (Rust + WebView2) with a new React front end, replacing the previous build entirely. Everything below is new or reworked relative to the 1.x line.

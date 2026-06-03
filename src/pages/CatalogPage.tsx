@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { MagnifyingGlass, X, Check, CircleNotch, DownloadSimple } from '@phosphor-icons/react'
 import { useLibrary } from '../lib/library-context'
+import { useInstaller } from '../lib/installer-context'
 import { getAppsMeta, type AppMeta } from '../lib/library'
 import { useInView, useReleasedDlc } from '../lib/dlc'
 import {
@@ -112,7 +113,13 @@ function CatalogCard({
 
 export default function CatalogPage({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const { games, steamPath, reload } = useLibrary()
+  const { setRestartRequired } = useInstaller()
   const installedIds = useMemo(() => new Set(games.map((g) => g.app_id)), [games])
+
+  const markInstalled = useCallback(async () => {
+    setRestartRequired(true)
+    await reload()
+  }, [setRestartRequired, reload])
 
   const [query, setQuery] = useState('')
   const [trending, setTrending] = useState<CatalogItem[]>([])
@@ -172,13 +179,14 @@ export default function CatalogPage({ onNavigate }: { onNavigate: (tab: string) 
       if (!steamPath) return false
       try {
         await catalogInstall(appId, steamPath)
+        setRestartRequired(true)
         await reload()
         return true
       } catch {
         return false
       }
     },
-    [steamPath, reload],
+    [steamPath, reload, setRestartRequired],
   )
 
   const handleInstallAt = useCallback(
@@ -186,13 +194,14 @@ export default function CatalogPage({ onNavigate }: { onNavigate: (tab: string) 
       if (!steamPath) return false
       try {
         await catalogInstallAt(appId, steamPath, sha)
+        setRestartRequired(true)
         await reload()
         return true
       } catch {
         return false
       }
     },
-    [steamPath, reload],
+    [steamPath, reload, setRestartRequired],
   )
 
   const addToLibrary = useCallback(
@@ -310,7 +319,7 @@ export default function CatalogPage({ onNavigate }: { onNavigate: (tab: string) 
           onClose={() => setSelected(null)}
           onInstall={handleInstall}
           onInstallAt={handleInstallAt}
-          onInstalled={reload}
+          onInstalled={markInstalled}
           onSelectInstall={() => setInstallGame(selected)}
         />
       )}
@@ -323,7 +332,7 @@ export default function CatalogPage({ onNavigate }: { onNavigate: (tab: string) 
           installedIds={installedIds}
           steamPath={steamPath}
           onClose={() => setInstallGame(null)}
-          onInstalled={reload}
+          onInstalled={markInstalled}
         />
       )}
     </div>

@@ -100,7 +100,7 @@ export default function InstallSelectModal({
     }
     setInstalling(false)
     setProgress(null)
-    await onInstalled()
+    if (result) await onInstalled()
   }
 
   const mainStatus = statusOf(appId)

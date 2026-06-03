@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CaretDown, DotsThreeVertical, ArrowsClockwise, CircleNotch, SquaresFour, DownloadSimple, TrashSimple, MinusCircle } from '@phosphor-icons/react'
+import { CaretDown, DotsThreeVertical, ArrowsClockwise, CircleNotch, SquaresFour, DownloadSimple, TrashSimple, MinusCircle, MagnifyingGlass, X } from '@phosphor-icons/react'
 import { open } from '@tauri-apps/plugin-dialog'
 import ContextMenu, { type MenuEntry } from '../components/ContextMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -40,6 +40,53 @@ function GameImage({
   return <SmartImage sources={sources} className={className} />
 }
 
+function LibrarySearch({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const expanded = open || value.length > 0
+
+  return (
+    <motion.div
+      initial={false}
+      animate={{ width: expanded ? 220 : 32 }}
+      transition={{ duration: 0.24, ease: EASE }}
+      className="relative flex h-8 items-center overflow-hidden rounded-md border border-white/[0.06] bg-white/[0.02]"
+    >
+      <button
+        onClick={() => {
+          setOpen(true)
+          requestAnimationFrame(() => inputRef.current?.focus())
+        }}
+        className="flex h-8 w-8 shrink-0 items-center justify-center text-neutral-400 transition hover:text-neutral-200"
+      >
+        <MagnifyingGlass size={15} weight="bold" />
+      </button>
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={() => {
+          if (!value) setOpen(false)
+        }}
+        placeholder="Search library…"
+        tabIndex={expanded ? 0 : -1}
+        className="h-full min-w-0 flex-1 bg-transparent pr-8 text-[12.5px] text-neutral-200 outline-none placeholder:text-neutral-600"
+      />
+      {expanded && value && (
+        <button
+          onClick={() => {
+            onChange('')
+            inputRef.current?.focus()
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-600 transition hover:text-neutral-300 active:scale-90"
+        >
+          <X size={13} weight="bold" />
+        </button>
+      )}
+    </motion.div>
+  )
+}
+
 interface DlcRow {
   id: number
   name: string
@@ -59,6 +106,8 @@ function GameCard({
   onToggleMenu,
   onDlcAction,
   onDlc,
+  onInstallAll,
+  installingAll,
 }: {
   game: InstalledGame
   meta?: AppMeta
@@ -72,6 +121,8 @@ function GameCard({
   onToggleMenu: (x: number, y: number) => void
   onDlcAction: (dlc: DlcRow, action: 'install' | 'uninstall') => void
   onDlc: (appId: number, total: number, installed: number) => void
+  onInstallAll: (dlcs: DlcRow[]) => void
+  installingAll: boolean
 }) {
   const [ref, inView] = useInView<HTMLDivElement>()
   const gridDlc = meta?.dlc_app_ids ?? EMPTY_DLC
@@ -96,6 +147,7 @@ function GameCard({
 
   const resolved = !loading
   const installedDlc = dlcRows.filter((d) => d.installed).length
+  const missingDlc = dlcRows.filter((d) => !d.installed)
   const showChip = (hasDlcSource && !resolved) || (resolved && dlcRows.length > 0)
 
   useEffect(() => {
@@ -177,6 +229,30 @@ function GameCard({
           >
             <div className="mx-3 border-t border-white/[0.06]" />
             <div className="px-3 py-2">
+              {resolved && missingDlc.length > 0 && (
+                <div className="mb-1 flex items-center justify-between gap-3 px-1 pb-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-600">
+                    {missingDlc.length} not installed
+                  </span>
+                  <button
+                    onClick={() => onInstallAll(missingDlc)}
+                    disabled={installingAll}
+                    className="flex h-7 items-center gap-1.5 rounded-md bg-neutral-100 px-2.5 text-[11px] font-semibold text-neutral-900 transition hover:bg-white active:scale-95 disabled:cursor-default disabled:bg-white/[0.06] disabled:text-neutral-500"
+                  >
+                    {installingAll ? (
+                      <>
+                        <CircleNotch size={12} weight="bold" className="animate-spin" />
+                        Installing…
+                      </>
+                    ) : (
+                      <>
+                        <DownloadSimple size={12} weight="bold" />
+                        Install All DLC
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
               {!resolved ? (
                 <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-neutral-600">
                   <CircleNotch size={14} className="animate-spin" />
@@ -229,7 +305,7 @@ interface Modal {
 
 export default function LibraryPage() {
   const { steamPath, games, metas, ready, reload } = useLibrary()
-  const { importPaths } = useInstaller()
+  const { importPaths, setRestartRequired } = useInstaller()
   const [dlcBusy, setDlcBusy] = useState<Set<number>>(new Set())
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [removing, setRemoving] = useState<string | null>(null)
@@ -237,6 +313,8 @@ export default function LibraryPage() {
   const [ctx, setCtx] = useState<{ game: InstalledGame; x: number; y: number } | null>(null)
   const [modal, setModal] = useState<Modal | null>(null)
   const [dlcStats, setDlcStats] = useState<Record<number, { total: number; installed: number }>>({})
+  const [search, setSearch] = useState('')
+  const [installingAll, setInstallingAll] = useState<string | null>(null)
 
   const loading = !ready
 
@@ -273,6 +351,15 @@ export default function LibraryPage() {
     })
   }, [games, metas, installedIds])
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return visible
+    return visible.filter((g) => {
+      const name = (metas.get(g.app_id)?.name ?? '').toLowerCase()
+      return name.includes(q) || g.app_id.includes(q)
+    })
+  }, [visible, search, metas])
+
   const dlcSummary = useMemo(() => {
     let total = 0
     let installed = 0
@@ -300,7 +387,8 @@ export default function LibraryPage() {
       const parentId = Number(game.app_id)
       setDlcBusy((prev) => new Set(prev).add(dlc.id))
       if (action === 'install') {
-        await catalogInstallSelection(steamPath, parentId, false, [[dlc.id, dlc.name]]).catch(() => null)
+        const res = await catalogInstallSelection(steamPath, parentId, false, [[dlc.id, dlc.name]]).catch(() => null)
+        if (res) setRestartRequired(true)
       } else {
         await uninstallDlc(steamPath, parentId, dlc.id).catch(() => {})
       }
@@ -311,7 +399,24 @@ export default function LibraryPage() {
         return next
       })
     },
-    [steamPath, reload],
+    [steamPath, reload, setRestartRequired],
+  )
+
+  const handleInstallAll = useCallback(
+    async (game: InstalledGame, dlcs: DlcRow[]) => {
+      if (!steamPath || dlcs.length === 0) return
+      setInstallingAll(game.app_id)
+      const res = await catalogInstallSelection(
+        steamPath,
+        Number(game.app_id),
+        false,
+        dlcs.map((d) => [d.id, d.name] as [number, string]),
+      ).catch(() => null)
+      if (res) setRestartRequired(true)
+      await reload()
+      setInstallingAll(null)
+    },
+    [steamPath, reload, setRestartRequired],
   )
 
   const confirm = useCallback(async () => {
@@ -393,6 +498,7 @@ export default function LibraryPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
+              <LibrarySearch value={search} onChange={setSearch} />
               <button
                 onClick={importFiles}
                 className="flex h-8 items-center gap-1.5 rounded-md border border-white/[0.06] px-2.5 text-[12px] font-semibold text-neutral-400 transition hover:bg-white/[0.04] hover:text-neutral-200 active:scale-95"
@@ -416,9 +522,14 @@ export default function LibraryPage() {
               <SquaresFour size={26} />
               <p className="text-[13px] font-medium">No manifests installed</p>
             </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 text-neutral-600">
+              <MagnifyingGlass size={24} />
+              <p className="text-[13px] font-medium">No games match “{search.trim()}”</p>
+            </div>
           ) : (
             <ScrollFade className="flex-1 pr-1" contentClassName="space-y-2.5">
-              {visible.map((game, i) => (
+              {filtered.map((game, i) => (
                 <GameCard
                   key={game.app_id}
                   game={game}
@@ -435,6 +546,8 @@ export default function LibraryPage() {
                   }
                   onDlcAction={(dlc, action) => handleDlcAction(game, dlc, action)}
                   onDlc={reportDlc}
+                  onInstallAll={(dlcs) => handleInstallAll(game, dlcs)}
+                  installingAll={installingAll === game.app_id}
                 />
               ))}
             </ScrollFade>
