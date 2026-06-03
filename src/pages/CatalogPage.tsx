@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { MagnifyingGlass, X, Check, CircleNotch, DownloadSimple } from '@phosphor-icons/react'
+import { MagnifyingGlass, X, Check, CircleNotch, DownloadSimple, Warning } from '@phosphor-icons/react'
 import { useLibrary } from '../lib/library-context'
 import { useInstaller } from '../lib/installer-context'
 import { getAppsMeta, type AppMeta } from '../lib/library'
@@ -113,7 +113,7 @@ function CatalogCard({
 
 export default function CatalogPage({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const { games, steamPath, reload } = useLibrary()
-  const { setRestartRequired } = useInstaller()
+  const { setRestartRequired, notify } = useInstaller()
   const installedIds = useMemo(() => new Set(games.map((g) => g.app_id)), [games])
 
   const markInstalled = useCallback(async () => {
@@ -224,6 +224,10 @@ export default function CatalogPage({ onNavigate }: { onNavigate: (tab: string) 
   )
 
   const handleAdd = (game: DisplayGame) => {
+    if (!steamPath) {
+      notify('error', 'Steam installation not found. Set your Steam path in Settings to install games.')
+      return
+    }
     if (game.dlc_app_ids.length > 0) setInstallGame(game)
     else addToLibrary(game.app_id)
   }
@@ -271,6 +275,13 @@ export default function CatalogPage({ onNavigate }: { onNavigate: (tab: string) 
           </button>
         )}
       </div>
+
+      {!steamPath && (
+        <div className="mb-4 flex shrink-0 items-center gap-2.5 rounded-lg border border-amber-400/20 bg-amber-400/[0.06] px-3.5 py-2.5 text-[12px] text-amber-200/90">
+          <Warning size={15} weight="fill" className="shrink-0 text-amber-400" />
+          Steam installation not found. Set your Steam path in Settings to install games.
+        </div>
+      )}
 
       <div className="mb-3 shrink-0">
         <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-neutral-600">

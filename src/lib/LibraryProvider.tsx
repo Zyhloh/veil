@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
-  getSteamPath,
   listInstalledGames,
   getAppsMeta,
   type InstalledGame,
   type AppMeta,
 } from './library'
+import { getAppConfig } from './config'
 import { LibraryContext } from './library-context'
 
 async function fetchAll(path: string) {
   const list = await listInstalledGames(path).catch(() => [] as InstalledGame[])
   const fetched = await getAppsMeta(list.map((g) => Number(g.app_id))).catch(() => [] as AppMeta[])
   return { list, metas: new Map(fetched.map((m) => [String(m.app_id), m])) }
+}
+
+function resolveSteamPath(): Promise<string> {
+  return getAppConfig()
+    .then((c) => c.steam_path || '')
+    .catch(() => '')
 }
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
@@ -22,26 +28,24 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true
-    getSteamPath()
-      .catch(() => '')
-      .then(async (path) => {
+    resolveSteamPath().then(async (path) => {
+      if (!alive) return
+      setSteamPath(path)
+      if (path) {
+        const data = await fetchAll(path)
         if (!alive) return
-        setSteamPath(path)
-        if (path) {
-          const data = await fetchAll(path)
-          if (!alive) return
-          setGames(data.list)
-          setMetas(data.metas)
-        }
-        setReady(true)
-      })
+        setGames(data.list)
+        setMetas(data.metas)
+      }
+      setReady(true)
+    })
     return () => {
       alive = false
     }
   }, [])
 
   const reload = useCallback(async () => {
-    const path = steamPath ?? (await getSteamPath().catch(() => ''))
+    const path = steamPath || (await resolveSteamPath())
     if (!path) return
     const data = await fetchAll(path)
     setGames(data.list)

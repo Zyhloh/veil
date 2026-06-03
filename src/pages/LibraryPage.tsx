@@ -24,6 +24,7 @@ import { useInView, useReleasedDlc } from '../lib/dlc'
 import { useInstaller } from '../lib/installer-context'
 
 const EMPTY_DLC: number[] = []
+const EMPTY_SET: Set<number> = new Set()
 
 const EASE = [0.25, 0.46, 0.45, 0.94] as const
 
@@ -57,7 +58,7 @@ function LibrarySearch({ value, onChange }: { value: string; onChange: (v: strin
           setOpen(true)
           requestAnimationFrame(() => inputRef.current?.focus())
         }}
-        className="flex h-8 w-8 shrink-0 items-center justify-center text-neutral-400 transition hover:text-neutral-200"
+        className="flex h-full aspect-square shrink-0 items-center justify-center text-neutral-400 transition hover:text-neutral-200"
       >
         <MagnifyingGlass size={15} weight="bold" />
       </button>
@@ -108,6 +109,7 @@ function GameCard({
   onDlc,
   onInstallAll,
   installingAll,
+  installAllDone,
 }: {
   game: InstalledGame
   meta?: AppMeta
@@ -123,6 +125,7 @@ function GameCard({
   onDlc: (appId: number, total: number, installed: number) => void
   onInstallAll: (dlcs: DlcRow[]) => void
   installingAll: boolean
+  installAllDone: Set<number>
 }) {
   const [ref, inView] = useInView<HTMLDivElement>()
   const gridDlc = meta?.dlc_app_ids ?? EMPTY_DLC
@@ -139,10 +142,10 @@ function GameCard({
         .map((id) => ({
           id,
           name: dlcMetaMap.get(id)?.name ?? `App ${id}`,
-          installed: installedIds.has(String(id)) || game.included_app_ids.includes(id),
+          installed: installedIds.has(String(id)) || game.included_app_ids.includes(id) || installAllDone.has(id),
         }))
-        .sort((a, b) => Number(b.installed) - Number(a.installed) || a.name.localeCompare(b.name)),
-    [dlcIds, dlcMetaMap, installedIds, game.included_app_ids],
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [dlcIds, dlcMetaMap, installedIds, game.included_app_ids, installAllDone],
   )
 
   const resolved = !loading
@@ -267,25 +270,35 @@ function GameCard({
                         className={`h-1.5 w-1.5 shrink-0 rounded-full ${dlc.installed ? 'bg-emerald-500' : 'bg-neutral-700'}`}
                       />
                       <span className="min-w-0 flex-1 truncate text-[12.5px] text-neutral-300">{dlc.name}</span>
-                      <button
-                        onClick={() => onDlcAction(dlc, dlc.installed ? 'uninstall' : 'install')}
-                        disabled={busy}
-                        className="group/dlc flex w-[68px] shrink-0 items-center justify-end gap-1 text-[10px] font-semibold uppercase tracking-wide disabled:cursor-default"
-                      >
-                        {busy ? (
-                          <CircleNotch size={12} className="animate-spin text-neutral-500" />
-                        ) : dlc.installed ? (
-                          <>
-                            <span className="text-emerald-500/80 transition group-hover/dlc:hidden">Installed</span>
-                            <span className="hidden text-red-400 transition group-hover/dlc:inline">Uninstall</span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-neutral-600 transition group-hover/dlc:hidden">Available</span>
-                            <span className="hidden text-neutral-200 transition group-hover/dlc:inline">Install</span>
-                          </>
-                        )}
-                      </button>
+                      {installingAll ? (
+                        <span className="flex w-[68px] shrink-0 justify-end text-[10px] font-semibold uppercase tracking-wide">
+                          {dlc.installed ? (
+                            <span className="text-emerald-500/80">Installed</span>
+                          ) : (
+                            <span className="text-neutral-500">Installing</span>
+                          )}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => onDlcAction(dlc, dlc.installed ? 'uninstall' : 'install')}
+                          disabled={busy}
+                          className="group/dlc flex w-[68px] shrink-0 items-center justify-end gap-1 text-[10px] font-semibold uppercase tracking-wide disabled:cursor-default"
+                        >
+                          {busy ? (
+                            <CircleNotch size={12} className="animate-spin text-neutral-500" />
+                          ) : dlc.installed ? (
+                            <>
+                              <span className="text-emerald-500/80 transition group-hover/dlc:hidden">Installed</span>
+                              <span className="hidden text-red-400 transition group-hover/dlc:inline">Uninstall</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-neutral-600 transition group-hover/dlc:hidden">Available</span>
+                              <span className="hidden text-neutral-200 transition group-hover/dlc:inline">Install</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   )
                 })
@@ -315,6 +328,7 @@ export default function LibraryPage() {
   const [dlcStats, setDlcStats] = useState<Record<number, { total: number; installed: number }>>({})
   const [search, setSearch] = useState('')
   const [installingAll, setInstallingAll] = useState<string | null>(null)
+  const [installAllDone, setInstallAllDone] = useState<Set<number>>(EMPTY_SET)
 
   const loading = !ready
 
@@ -405,16 +419,21 @@ export default function LibraryPage() {
   const handleInstallAll = useCallback(
     async (game: InstalledGame, dlcs: DlcRow[]) => {
       if (!steamPath || dlcs.length === 0) return
+      const parentId = Number(game.app_id)
       setInstallingAll(game.app_id)
-      const res = await catalogInstallSelection(
-        steamPath,
-        Number(game.app_id),
-        false,
-        dlcs.map((d) => [d.id, d.name] as [number, string]),
-      ).catch(() => null)
-      if (res) setRestartRequired(true)
+      setInstallAllDone(new Set())
+      let anySuccess = false
+      for (const dlc of dlcs) {
+        const res = await catalogInstallSelection(steamPath, parentId, false, [[dlc.id, dlc.name]]).catch(() => null)
+        if (res) {
+          anySuccess = true
+          setInstallAllDone((prev) => new Set(prev).add(dlc.id))
+        }
+      }
+      if (anySuccess) setRestartRequired(true)
       await reload()
       setInstallingAll(null)
+      setInstallAllDone(EMPTY_SET)
     },
     [steamPath, reload, setRestartRequired],
   )
@@ -548,6 +567,7 @@ export default function LibraryPage() {
                   onDlc={reportDlc}
                   onInstallAll={(dlcs) => handleInstallAll(game, dlcs)}
                   installingAll={installingAll === game.app_id}
+                  installAllDone={installingAll === game.app_id ? installAllDone : EMPTY_SET}
                 />
               ))}
             </ScrollFade>

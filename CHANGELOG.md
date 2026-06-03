@@ -2,6 +2,17 @@
 
 All notable changes to Veil are documented here.
 
+## 2.0.2 — 2026-06-03
+
+### Fixed
+
+- Adding a game or DLC from the Catalog, or from a game's DLC list, now shows the "Steam Restart Required" indicator like drag-and-drop imports already did.
+- The DLC list no longer scrolls or jumps when you install an item — entries keep a stable order instead of re-sorting installed items to the top.
+- Install All DLC now locks the list while it runs, installs each DLC in turn, and flips each row from "Installing" to "Installed" as it completes.
+- The Library search button no longer starts expanded and animate-collapses on load or when switching tabs — it starts as a button.
+- Centered the magnifying-glass icon in the collapsed Library search button.
+- A Steam path set manually in Settings now persists across restarts, and the Catalog clearly tells you to set your Steam path when none is found instead of failing silently.
+
 ## 2.0.1 — 2026-06-03
 
 ### Added
