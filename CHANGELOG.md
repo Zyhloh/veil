@@ -2,6 +2,12 @@
 
 All notable changes to Veil are documented here.
 
+## 2.0.3 — 2026-06-06
+
+### Added
+
+- A "Join the Veil Discord" banner at the bottom of Settings that opens discord.gg/veilapp in your default browser.
+
 ## 2.0.2 — 2026-06-03
 
 ### Fixed

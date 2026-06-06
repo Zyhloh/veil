@@ -32,6 +32,7 @@ pub fn run() {
             commands::library::remove_manifest,
             commands::library::uninstall_game,
             commands::library::uninstall_dlc,
+            commands::library::open_library_folder,
             commands::system::open_folder,
             commands::system::open_url,
             commands::system::mark_main_ready,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CaretDown, DotsThreeVertical, ArrowsClockwise, CircleNotch, SquaresFour, DownloadSimple, TrashSimple, MinusCircle, MagnifyingGlass, X } from '@phosphor-icons/react'
+import { CaretDown, DotsThreeVertical, ArrowsClockwise, CircleNotch, SquaresFour, DownloadSimple, TrashSimple, MinusCircle, MagnifyingGlass, FolderOpen, X } from '@phosphor-icons/react'
 import { open } from '@tauri-apps/plugin-dialog'
 import ContextMenu, { type MenuEntry } from '../components/ContextMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -12,6 +12,7 @@ import {
   uninstallGame,
   uninstallDlc,
   openFolder,
+  openLibraryFolder,
   openUrl,
   launchWithSteam,
   launchWithoutSteam,
@@ -518,6 +519,13 @@ export default function LibraryPage() {
             </div>
             <div className="flex items-center gap-2">
               <LibrarySearch value={search} onChange={setSearch} />
+              <button
+                onClick={() => steamPath && openLibraryFolder(steamPath).catch(() => {})}
+                title="Open library folder"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/[0.06] bg-white/[0.02] text-neutral-400 transition hover:bg-white/[0.04] hover:text-neutral-200 active:scale-95"
+              >
+                <FolderOpen size={15} weight="bold" />
+              </button>
               <button
                 onClick={importFiles}
                 className="flex h-8 items-center gap-1.5 rounded-md border border-white/[0.06] px-2.5 text-[12px] font-semibold text-neutral-400 transition hover:bg-white/[0.04] hover:text-neutral-200 active:scale-95"

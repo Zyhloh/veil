@@ -12,8 +12,10 @@ import {
   DownloadSimple,
   Warning,
   X,
+  ArrowSquareOut,
 } from '@phosphor-icons/react'
 import { useLibrary } from '../lib/library-context'
+import { openUrl } from '../lib/library'
 import { useInstaller } from '../lib/installer-context'
 import { useMaximized } from '../lib/useMaximized'
 import {
@@ -404,6 +406,38 @@ export default function SettingsPage() {
             <Warning size={13} /> Steam installation not detected — set the path above.
           </p>
         )}
+
+        <button
+          onClick={() => openUrl('https://discord.gg/veilapp').catch(() => {})}
+          className="group mt-1 flex items-center gap-4 rounded-xl border border-white/[0.14] bg-white/[0.02] p-4 text-left transition-colors hover:border-white/[0.22] hover:bg-white/[0.04] active:scale-[0.995]"
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04]">
+            <span
+              className="h-[18px] w-[18px] bg-neutral-300 transition-colors group-hover:bg-white"
+              style={{
+                WebkitMaskImage: 'url(/icons/discord.svg)',
+                maskImage: 'url(/icons/discord.svg)',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'center',
+                maskPosition: 'center',
+                WebkitMaskSize: 'contain',
+                maskSize: 'contain',
+              }}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold text-neutral-200">Join the Community · Official Veil Server</p>
+            <p className="mt-0.5 text-[11.5px] leading-relaxed text-neutral-500">
+              Generate manifests for any game · Fast &amp; reliable support
+            </p>
+          </div>
+          <ArrowSquareOut
+            size={16}
+            weight="bold"
+            className="shrink-0 text-neutral-600 transition-colors group-hover:text-neutral-400"
+          />
+        </button>
       </div>
 
       {resetPhase !== 'idle' && (

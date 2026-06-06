@@ -38,6 +38,20 @@ fn stplugin_dir(steam_path: &str) -> PathBuf {
     PathBuf::from(steam_path).join("config").join("stplug-in")
 }
 
+#[tauri::command]
+pub fn open_library_folder(steam_path: String) -> Result<(), String> {
+    if steam_path.is_empty() {
+        return Err("No Steam path provided".to_string());
+    }
+    let dir = stplugin_dir(&steam_path);
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::process::Command::new("explorer")
+        .arg(&dir)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 fn meta_cache_dir() -> PathBuf {
     let dir = dirs::cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))

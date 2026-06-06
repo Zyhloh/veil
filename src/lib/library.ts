@@ -56,6 +56,10 @@ export function openFolder(path: string): Promise<void> {
   return invoke('open_folder', { path })
 }
 
+export function openLibraryFolder(steamPath: string): Promise<void> {
+  return invoke('open_library_folder', { steamPath })
+}
+
 export function openUrl(url: string): Promise<void> {
   return invoke('open_url', { url })
 }
