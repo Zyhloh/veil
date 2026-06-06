@@ -13,6 +13,7 @@ import PatcherPage from '../pages/PatcherPage'
 import ForzaFixPage from '../pages/ForzaFixPage'
 import BypassesPage from '../pages/BypassesPage'
 import DumperPage from '../pages/DumperPage'
+import CloudSavesPage from '../pages/CloudSavesPage'
 import SettingsPage from '../pages/SettingsPage'
 import { useMaximized } from '../lib/useMaximized'
 import { useInstaller } from '../lib/installer-context'
@@ -22,6 +23,7 @@ import {
   Wrench,
   ShieldSlash,
   Database,
+  CloudArrowUp,
   GearSix,
   Tray,
   Minus,
@@ -52,6 +54,7 @@ const sections: { title: string; items: NavItem[] }[] = [
       { id: 'Fixes', Icon: Wrench, desc: 'Patches and game-specific fixes.' },
       { id: 'Bypasses', Icon: ShieldSlash, desc: 'Manage protection bypasses.' },
       { id: 'Dumper', Icon: Database, desc: 'Dump manifests from your library.' },
+      { id: 'Cloud Saves', Icon: CloudArrowUp, desc: 'Redirect cloud saves to a local folder.' },
     ],
   },
 ]
@@ -239,6 +242,8 @@ export default function MainShell() {
             <BypassesPage />
           ) : active === 'Dumper' ? (
             <DumperPage />
+          ) : active === 'Cloud Saves' ? (
+            <CloudSavesPage />
           ) : active === 'Settings' ? (
             <SettingsPage />
           ) : (

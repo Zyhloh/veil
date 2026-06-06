@@ -1,6 +1,7 @@
 pub mod bypasses;
 pub mod catalog;
 pub mod categories;
+pub mod cloudsave;
 pub mod config;
 pub mod dumper;
 pub mod fix;
@@ -8,6 +9,7 @@ pub mod gamingservices;
 pub mod install;
 pub mod patcher;
 pub mod library;
+pub mod onlinefix;
 pub mod reset;
 pub mod steam;
 pub mod system;

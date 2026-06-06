@@ -2,6 +2,20 @@
 
 All notable changes to Veil are documented here.
 
+## 2.0.4 — 2026-06-06
+
+### Added
+
+- A "Game dump location" setting that lets you choose where dumped manifests are saved.
+
+### Fixed
+
+- The dumper no longer fails when the Documents folder is missing — on first run it uses Documents if present, otherwise falls back to your user folder.
+
+### Changed
+
+- Reorganized the Settings screen with a clearer header and grouped sections (Veil, Locations, Updates, Maintenance).
+
 ## 2.0.3 — 2026-06-06
 
 ### Added

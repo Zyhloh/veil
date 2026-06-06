@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::oneshot;
@@ -278,13 +278,7 @@ pub async fn dumper_dump_app(
 ) -> Result<DumpResult, String> {
     let out_dir = match output_dir {
         Some(d) if !d.is_empty() => std::path::PathBuf::from(d),
-        _ => {
-            let base = app
-                .path()
-                .document_dir()
-                .map_err(|e| format!("No documents dir: {}", e))?;
-            base.join("Veil Dumps").join(app_id.to_string())
-        }
+        _ => crate::commands::config::dump_base_dir().join(app_id.to_string()),
     };
     std::fs::create_dir_all(&out_dir)
         .map_err(|e| format!("Failed to create output dir: {}", e))?;

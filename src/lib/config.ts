@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 export interface AppConfig {
   steam_path: string
+  dump_path: string
   veil_enabled: boolean
   veil_category: boolean
   patches_applied: boolean
@@ -13,6 +14,10 @@ export function getAppConfig(): Promise<AppConfig> {
 
 export function saveAppConfig(config: AppConfig): Promise<void> {
   return invoke('save_app_config', { config })
+}
+
+export function resolveDumpPath(): Promise<string> {
+  return invoke('resolve_dump_path')
 }
 
 export interface VerifyResult {

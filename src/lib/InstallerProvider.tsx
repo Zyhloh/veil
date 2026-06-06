@@ -15,6 +15,7 @@ import {
   checkForUpdate,
   type UpdateInfo,
 } from './config'
+import { cloudSavesEnsure, cloudSavesStatus, type CloudSavesStatus } from './cloudsave'
 import { InstallerContext, type ToastState } from './installer-context'
 
 const VALID = /\.(zip|lua|manifest)$/i
@@ -26,6 +27,7 @@ export function InstallerProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastState | null>(null)
   const [restartRequired, setRestartRequired] = useState(false)
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
+  const [cloudStatus, setCloudStatus] = useState<CloudSavesStatus | null>(null)
   const toastId = useRef(0)
   const busyRef = useRef(false)
   const startedRef = useRef(false)
@@ -43,6 +45,12 @@ export function InstallerProvider({ children }: { children: ReactNode }) {
     const info = await checkForUpdate().catch(() => null)
     if (info) setUpdateInfo(info)
   }, [])
+
+  const refreshCloud = useCallback(async () => {
+    if (!steamPath) return
+    const status = await cloudSavesStatus(steamPath).catch(() => null)
+    if (status) setCloudStatus(status)
+  }, [steamPath])
 
   const importPaths = useCallback(
     async (paths: string[]) => {
@@ -128,7 +136,7 @@ export function InstallerProvider({ children }: { children: ReactNode }) {
       }
 
       if (cfg?.veil_category && sp) {
-        step('Syncing collections', 74)
+        step('Syncing collections', 70)
         try {
           if (await veilCategoryNeedsSync(sp)) {
             const running = await invoke<boolean>('check_steam_running').catch(() => false)
@@ -139,6 +147,14 @@ export function InstallerProvider({ children }: { children: ReactNode }) {
         } catch {
           /* ignore */
         }
+      }
+
+      if (sp && cfg?.veil_enabled) {
+        step('Setting up Cloud Saves', 84)
+        const status = await cloudSavesEnsure(sp).catch(() => null)
+        if (status) setCloudStatus(status)
+      } else if (sp) {
+        cloudSavesStatus(sp).then(setCloudStatus).catch(() => {})
       }
 
       step('Loading library', 92)
@@ -196,6 +212,9 @@ export function InstallerProvider({ children }: { children: ReactNode }) {
         updateInfo,
         setUpdateInfo,
         refreshUpdate,
+        cloudStatus,
+        setCloudStatus,
+        refreshCloud,
       }}
     >
       {children}

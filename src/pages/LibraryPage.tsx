@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CaretDown, DotsThreeVertical, ArrowsClockwise, CircleNotch, SquaresFour, DownloadSimple, TrashSimple, MinusCircle, MagnifyingGlass, FolderOpen, X } from '@phosphor-icons/react'
+import { CaretDown, DotsThreeVertical, ArrowsClockwise, CircleNotch, SquaresFour, DownloadSimple, TrashSimple, MinusCircle, MagnifyingGlass, FolderOpen, X, Globe } from '@phosphor-icons/react'
 import { open } from '@tauri-apps/plugin-dialog'
 import ContextMenu, { type MenuEntry } from '../components/ContextMenu'
 import ConfirmDialog from '../components/ConfirmDialog'
+import Tooltip from '../components/Tooltip'
 import SmartImage from '../components/SmartImage'
 import ScrollFade from '../components/ScrollFade'
 import { useLibrary } from '../lib/library-context'
@@ -21,11 +22,18 @@ import {
   type AppMeta,
 } from '../lib/library'
 import { catalogInstallSelection } from '../lib/catalog'
+import { onlineFixCached, onlineFixFetch, type OnlineFixEntry } from '../lib/onlinefix'
 import { useInView, useReleasedDlc } from '../lib/dlc'
 import { useInstaller } from '../lib/installer-context'
 
 const EMPTY_DLC: number[] = []
 const EMPTY_SET: Set<number> = new Set()
+
+type FixStatus = 'loading' | 'available' | 'unavailable' | 'error'
+interface FixUi {
+  status: FixStatus
+  url?: string | null
+}
 
 const EASE = [0.25, 0.46, 0.45, 0.94] as const
 
@@ -98,6 +106,7 @@ interface DlcRow {
 function GameCard({
   game,
   meta,
+  fix,
   installedIds,
   dlcBusy,
   expanded,
@@ -114,6 +123,7 @@ function GameCard({
 }: {
   game: InstalledGame
   meta?: AppMeta
+  fix?: FixUi
   installedIds: Set<string>
   dlcBusy: Set<number>
   expanded: boolean
@@ -187,6 +197,11 @@ function GameCard({
           <p className="mt-0.5 text-[11px] font-medium text-neutral-700">
             {game.manifest_count} manifest{game.manifest_count !== 1 ? 's' : ''}
             {game.install_dir ? ' · Files installed' : ''}
+            {fix?.status === 'available'
+              ? ' · Online Fix Available'
+              : fix?.status === 'unavailable'
+                ? ' · Online Fix Not Available'
+                : ''}
           </p>
         </div>
 
@@ -208,18 +223,59 @@ function GameCard({
           </div>
         )}
 
-        <button
-          data-ctx-trigger
-          onClick={(e) => {
-            e.stopPropagation()
-            const rect = e.currentTarget.getBoundingClientRect()
-            onToggleMenu(rect.right, rect.bottom + 6)
-          }}
-          disabled={removing}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-neutral-500 transition hover:bg-white/[0.06] hover:text-neutral-200 active:scale-90 disabled:opacity-40"
-        >
-          {removing ? <CircleNotch size={16} className="animate-spin" /> : <DotsThreeVertical size={18} weight="bold" />}
-        </button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            data-ctx-trigger
+            onClick={(e) => {
+              e.stopPropagation()
+              const rect = e.currentTarget.getBoundingClientRect()
+              onToggleMenu(rect.right, rect.bottom + 6)
+            }}
+            disabled={removing}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 transition hover:bg-white/[0.06] hover:text-neutral-200 active:scale-90 disabled:opacity-40"
+          >
+            {removing ? <CircleNotch size={16} className="animate-spin" /> : <DotsThreeVertical size={18} weight="bold" />}
+          </button>
+
+          {(() => {
+            const st = fix?.status
+            const loading = !st || st === 'loading'
+            const avail = st === 'available' && !!fix?.url
+            const label = loading
+              ? 'Checking Online Fixes…'
+              : avail
+                ? 'Open Online Fix'
+                : st === 'error'
+                  ? "Couldn't Check Online Fixes"
+                  : 'No Online Fix Available'
+            return (
+              <Tooltip label={label}>
+                <button
+                  onClick={
+                    avail
+                      ? (e) => {
+                          e.stopPropagation()
+                          openUrl(fix!.url!).catch(() => {})
+                        }
+                      : undefined
+                  }
+                  disabled={!avail}
+                  className={`flex h-8 w-8 items-center justify-center rounded-md transition ${
+                    avail
+                      ? 'text-neutral-400 hover:bg-white/[0.06] hover:text-neutral-100 active:scale-90'
+                      : 'cursor-default text-neutral-700'
+                  }`}
+                >
+                  {loading ? (
+                    <CircleNotch size={15} className="animate-spin text-neutral-600" />
+                  ) : (
+                    <Globe size={17} weight={avail ? 'bold' : 'regular'} />
+                  )}
+                </button>
+              </Tooltip>
+            )
+          })()}
+        </div>
       </div>
 
       <AnimatePresence initial={false}>
@@ -330,6 +386,10 @@ export default function LibraryPage() {
   const [search, setSearch] = useState('')
   const [installingAll, setInstallingAll] = useState<string | null>(null)
   const [installAllDone, setInstallAllDone] = useState<Set<number>>(EMPTY_SET)
+  const [fixes, setFixes] = useState<Record<string, FixUi>>({})
+  const fixesRef = useRef(fixes)
+  fixesRef.current = fixes
+  const fixInFlight = useRef<Set<string>>(new Set())
 
   const loading = !ready
 
@@ -395,6 +455,77 @@ export default function LibraryPage() {
       return next
     })
   }, [])
+
+  // Look up online-fix.me availability for each app, throttled with backoff.
+  // Results are cached on disk by the backend, so repeat loads resolve instantly.
+  useEffect(() => {
+    if (!ready || !steamPath) return
+    let cancelled = false
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+    const lookupOne = async (g: InstalledGame) => {
+      const id = g.app_id
+      if (fixInFlight.current.has(id)) return
+      fixInFlight.current.add(id)
+      setFixes((p) => ({ ...p, [id]: { status: 'loading' } }))
+      let attempt = 0
+      try {
+        for (;;) {
+          try {
+            const res = await onlineFixFetch(Number(id), metas.get(id)?.name || '')
+            setFixes((p) => ({ ...p, [id]: { status: res.status, url: res.url } }))
+            return
+          } catch (e) {
+            if (String(e).includes('rate_limited') && attempt < 5) {
+              attempt++
+              await sleep(Math.min(1500 * 2 ** (attempt - 1), 30000))
+              continue
+            }
+            setFixes((p) => ({ ...p, [id]: { status: 'error' } }))
+            return
+          }
+        }
+      } finally {
+        fixInFlight.current.delete(id)
+      }
+    }
+
+    ;(async () => {
+      const candidates = visible.filter((g) => {
+        const st = fixesRef.current[g.app_id]?.status
+        if (st === 'available' || st === 'unavailable' || st === 'error') return false
+        if (fixInFlight.current.has(g.app_id)) return false
+        const name = metas.get(g.app_id)?.name
+        return !!name && !/^App \d+$/.test(name)
+      })
+      if (candidates.length === 0) return
+
+      const cached = await onlineFixCached(candidates.map((g) => Number(g.app_id))).catch(
+        () => ({}) as Record<string, OnlineFixEntry>,
+      )
+      if (cancelled) return
+
+      const resolved: Record<string, FixUi> = {}
+      const toFetch: InstalledGame[] = []
+      for (const g of candidates) {
+        const c = cached[g.app_id]
+        if (c) resolved[g.app_id] = { status: c.status, url: c.url }
+        else toFetch.push(g)
+      }
+      if (Object.keys(resolved).length) setFixes((p) => ({ ...p, ...resolved }))
+
+      for (const g of toFetch) {
+        if (cancelled) return
+        await lookupOne(g)
+        if (cancelled) return
+        await sleep(400)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [ready, steamPath, visible, metas])
 
   const handleDlcAction = useCallback(
     async (game: InstalledGame, dlc: DlcRow, action: 'install' | 'uninstall') => {
@@ -561,6 +692,7 @@ export default function LibraryPage() {
                   key={game.app_id}
                   game={game}
                   meta={metas.get(game.app_id)}
+                  fix={fixes[game.app_id]}
                   installedIds={installedIds}
                   dlcBusy={dlcBusy}
                   expanded={expanded.has(game.app_id)}

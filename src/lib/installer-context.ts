@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { UpdateInfo } from './config'
+import type { CloudSavesStatus } from './cloudsave'
 
 export interface ToastState {
   id: number
@@ -17,6 +18,9 @@ export interface InstallerValue {
   updateInfo: UpdateInfo | null
   setUpdateInfo: (info: UpdateInfo | null) => void
   refreshUpdate: () => Promise<void>
+  cloudStatus: CloudSavesStatus | null
+  setCloudStatus: (status: CloudSavesStatus | null) => void
+  refreshCloud: () => Promise<void>
 }
 
 export const InstallerContext = createContext<InstallerValue | null>(null)

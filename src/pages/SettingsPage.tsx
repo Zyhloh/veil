@@ -21,6 +21,7 @@ import { useMaximized } from '../lib/useMaximized'
 import {
   getAppConfig,
   saveAppConfig,
+  resolveDumpPath,
   ensureVeilDll,
   removeVeilDll,
   syncVeilCategory,
@@ -74,6 +75,38 @@ function Row({
         <p className="mt-1 text-[11.5px] leading-relaxed text-neutral-500">{desc}</p>
       </div>
       <div className="shrink-0">{children}</div>
+    </div>
+  )
+}
+
+function PathRow({
+  label,
+  desc,
+  path,
+  onChange,
+}: {
+  label: string
+  desc: React.ReactNode
+  path: string
+  onChange: () => void
+}) {
+  return (
+    <div>
+      <Row label={label} desc={desc}>
+        <button
+          onClick={onChange}
+          className="flex h-9 items-center gap-1.5 rounded-md border border-white/[0.08] px-3 text-[12px] font-semibold text-neutral-300 transition hover:bg-white/[0.05] active:scale-95"
+        >
+          <FolderOpen size={14} weight="bold" />
+          Change
+        </button>
+      </Row>
+      <div className="mt-3 flex items-center gap-2 rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
+        <FolderOpen size={13} weight="fill" className="shrink-0 text-neutral-600" />
+        <span className={`truncate font-mono text-[11px] ${path ? 'text-neutral-400' : 'text-neutral-600'}`}>
+          {path || 'Not set'}
+        </span>
+      </div>
     </div>
   )
 }
@@ -187,9 +220,11 @@ export default function SettingsPage() {
   const [updating, setUpdating] = useState(false)
   const [resetPhase, setResetPhase] = useState<'idle' | 'confirm' | 'running' | 'done'>('idle')
   const [resetResult, setResetResult] = useState<ResetResult | null>(null)
+  const [defaultDumpPath, setDefaultDumpPath] = useState('')
 
   useEffect(() => {
     getAppConfig().then(setConfig).catch(() => {})
+    resolveDumpPath().then(setDefaultDumpPath).catch(() => {})
   }, [])
 
   const persist = useCallback(async (next: AppConfig) => {
@@ -244,12 +279,28 @@ export default function SettingsPage() {
   }, [config, catBusy, persist, notify, setRestartRequired])
 
   const changePath = useCallback(async () => {
-    const dir = await openDialog({ directory: true, multiple: false })
+    const dir = await openDialog({
+      directory: true,
+      multiple: false,
+      defaultPath: config?.steam_path || undefined,
+    })
     if (typeof dir !== 'string' || !config) return
     await persist({ ...config, steam_path: dir })
     await setSteamPath(dir)
     notify('success', 'Steam path updated')
   }, [config, persist, setSteamPath, notify])
+
+  const changeDumpPath = useCallback(async () => {
+    const dir = await openDialog({
+      directory: true,
+      multiple: false,
+      defaultPath: defaultDumpPath || undefined,
+    })
+    if (typeof dir !== 'string' || !config) return
+    await persist({ ...config, dump_path: dir })
+    setDefaultDumpPath(dir)
+    notify('success', 'Game dump location updated')
+  }, [config, defaultDumpPath, persist, notify])
 
   const checkNow = useCallback(async () => {
     setChecking(true)
@@ -282,10 +333,18 @@ export default function SettingsPage() {
   }, [config, notify])
 
   const path = config?.steam_path || steamPath || ''
+  const dumpPath = defaultDumpPath
 
   return (
     <div className="h-full overflow-y-auto px-10 py-8">
-      <div className="mx-auto flex max-w-[640px] flex-col gap-3">
+      <div className="mx-auto flex max-w-[640px] flex-col gap-6">
+        <div>
+          <h1 className="text-[20px] font-bold tracking-tight text-neutral-100">Settings</h1>
+          <p className="mt-1 text-[12.5px] text-neutral-500">
+            Manage Veil, your Steam installation, and where dumps are saved.
+          </p>
+        </div>
+
         <Section title="Veil">
           <Row
             label="Enable Veil"
@@ -312,6 +371,27 @@ export default function SettingsPage() {
               <Toggle on={!!config?.veil_category} onClick={toggleCategory} disabled={!config} />
             )}
           </Row>
+        </Section>
+
+        <Section title="Locations">
+          <PathRow
+            label="Steam path"
+            desc="Where your Steam installation lives. Auto-detected on first run."
+            path={path}
+            onChange={changePath}
+          />
+          {!path && (
+            <p className="mt-2 flex items-center gap-1.5 text-[11.5px] text-amber-300/90">
+              <Warning size={13} weight="bold" /> Steam installation not detected — set the path above.
+            </p>
+          )}
+          <div className="my-4 border-t border-white/[0.05]" />
+          <PathRow
+            label="Game dump location"
+            desc="Where dumped game manifests are saved. Each game gets its own folder inside."
+            path={dumpPath}
+            onChange={changeDumpPath}
+          />
         </Section>
 
         <Section title="Updates">
@@ -372,20 +452,7 @@ export default function SettingsPage() {
           )}
         </Section>
 
-        <Section title="Steam">
-          <Row
-            label="Steam path"
-            desc={<span className="break-all font-mono text-[11px] text-neutral-500">{path || 'Not set'}</span>}
-          >
-            <button
-              onClick={changePath}
-              className="flex h-9 items-center gap-1.5 rounded-md border border-white/[0.08] px-3 text-[12px] font-semibold text-neutral-300 transition hover:bg-white/[0.05] active:scale-95"
-            >
-              <FolderOpen size={14} weight="bold" />
-              Change
-            </button>
-          </Row>
-          <div className="my-4 border-t border-white/[0.05]" />
+        <Section title="Maintenance">
           <Row
             label="Reset Steam"
             desc="Wipe Steam's core files for a fresh download. Games, saves, logins, and manifests are kept."
@@ -400,12 +467,6 @@ export default function SettingsPage() {
             </button>
           </Row>
         </Section>
-
-        {!path && (
-          <p className="flex items-center justify-center gap-1.5 py-1 text-[11.5px] text-neutral-600">
-            <Warning size={13} /> Steam installation not detected — set the path above.
-          </p>
-        )}
 
         <button
           onClick={() => openUrl('https://discord.gg/veilapp').catch(() => {})}
