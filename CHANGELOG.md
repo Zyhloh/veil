@@ -2,6 +2,12 @@
 
 All notable changes to Veil are documented here.
 
+## 2.1.1 — 2026-06-07
+
+### Fixed
+
+- The Veil collection now updates for games added via the Catalog, drag-and-drop, and Import — not just on startup. The collection is written whenever Veil starts or restarts Steam (while it's closed, so the change sticks), with no forced restart.
+
 ## 2.1.0 — 2026-06-07
 
 ### Changed
