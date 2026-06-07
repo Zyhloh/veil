@@ -26,11 +26,6 @@ Grab the latest installer from the [Releases](../../releases) page and run it. V
 - Cloud Saves works natively inside Steam — saves appear to sync exactly like Steam Cloud, but the data is read and written to your local folder. Only your Veil games are affected; owned games keep using Steam Cloud.
 - Steam is closed and reopened automatically around operations that need it (patching, bypasses, collection changes, cloud-save setup).
 
-## Requirements
-
-- Windows 10/11
-- Steam
-
 ## License
 
 Released under the MIT License — see [LICENSE](LICENSE).
