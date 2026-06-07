@@ -84,6 +84,7 @@ pub fn run() {
             commands::cloudsave::cloud_saves_import,
             commands::onlinefix::online_fix_cached,
             commands::onlinefix::online_fix_fetch,
+            commands::plugin::sync_plugins,
             commands::reset::reset_steam_install,
             commands::updater::check_for_update,
             commands::updater::download_and_run_update,

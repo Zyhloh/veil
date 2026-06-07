@@ -23,7 +23,7 @@ pub struct InstallReport {
 }
 
 struct Dest {
-    stplugin: PathBuf,
+    plugin: PathBuf,
     depot_a: PathBuf,
     depot_b: PathBuf,
 }
@@ -45,7 +45,7 @@ fn app_id_from_name(name: &str) -> Option<u32> {
 }
 
 fn write_lua(dest: &Dest, name: &str, data: &[u8]) -> InstallEntry {
-    let target = dest.stplugin.join(name);
+    let target = dest.plugin.join(name);
     let existed = target.exists();
     let ok = fs::write(&target, data).is_ok();
     InstallEntry {
@@ -100,11 +100,11 @@ pub async fn install_manifest_paths(
     paths: Vec<String>,
 ) -> Result<InstallReport, String> {
     let dest = Dest {
-        stplugin: Path::new(&steam_path).join("config").join("stplug-in"),
+        plugin: Path::new(&steam_path).join("config").join("veil-plugin"),
         depot_a: Path::new(&steam_path).join("config").join("depotcache"),
         depot_b: Path::new(&steam_path).join("depotcache"),
     };
-    fs::create_dir_all(&dest.stplugin).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dest.plugin).map_err(|e| e.to_string())?;
     fs::create_dir_all(&dest.depot_a).map_err(|e| e.to_string())?;
     fs::create_dir_all(&dest.depot_b).map_err(|e| e.to_string())?;
 
@@ -195,6 +195,8 @@ pub async fn install_manifest_paths(
     let mut app_ids: Vec<u32> = entries.iter().filter_map(|e| e.app_id).collect();
     app_ids.sort_unstable();
     app_ids.dedup();
+
+    super::plugin::sync(&steam_path);
 
     Ok(InstallReport {
         entries,

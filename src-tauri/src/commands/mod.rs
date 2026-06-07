@@ -10,6 +10,7 @@ pub mod install;
 pub mod patcher;
 pub mod library;
 pub mod onlinefix;
+pub mod plugin;
 pub mod reset;
 pub mod steam;
 pub mod system;

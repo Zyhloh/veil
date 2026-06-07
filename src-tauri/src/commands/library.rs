@@ -34,8 +34,8 @@ struct CachedMeta {
     meta: AppMeta,
 }
 
-fn stplugin_dir(steam_path: &str) -> PathBuf {
-    PathBuf::from(steam_path).join("config").join("stplug-in")
+fn plugin_dir(steam_path: &str) -> PathBuf {
+    PathBuf::from(steam_path).join("config").join("veil-plugin")
 }
 
 #[tauri::command]
@@ -43,7 +43,7 @@ pub fn open_library_folder(steam_path: String) -> Result<(), String> {
     if steam_path.is_empty() {
         return Err("No Steam path provided".to_string());
     }
-    let dir = stplugin_dir(&steam_path);
+    let dir = plugin_dir(&steam_path);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     std::process::Command::new("explorer")
         .arg(&dir)
@@ -106,7 +106,8 @@ fn find_install_dir(libraries: &[PathBuf], app_id: &str) -> Option<String> {
 
 #[tauri::command]
 pub fn list_installed_games(steam_path: String) -> Result<Vec<InstalledGame>, String> {
-    let dir = stplugin_dir(&steam_path);
+    super::plugin::sync(&steam_path);
+    let dir = plugin_dir(&steam_path);
     if !dir.exists() {
         return Ok(Vec::new());
     }
@@ -331,7 +332,7 @@ fn remove_depot_caches(steam_path: &str, depots: &BTreeSet<String>) {
 }
 
 fn remove_manifest_files(steam_path: &str, app_id: &str) {
-    let lua_path = stplugin_dir(steam_path).join(format!("{}.lua", app_id));
+    let lua_path = plugin_dir(steam_path).join(format!("{}.lua", app_id));
 
     let mut depots: BTreeSet<String> = BTreeSet::new();
     if let Ok(re) = regex::Regex::new(r#"addappid\s*\(\s*(\d+)\s*,\s*\d+\s*,\s*"[a-fA-F0-9]+""#) {
@@ -342,20 +343,20 @@ fn remove_manifest_files(steam_path: &str, app_id: &str) {
         }
     }
 
-    fs::remove_file(&lua_path).ok();
+    super::plugin::remove_lua(steam_path, app_id);
     remove_depot_caches(steam_path, &depots);
 }
 
 #[tauri::command]
 pub fn uninstall_dlc(steam_path: String, main_app_id: u32, dlc_id: u32) -> Result<(), String> {
-    let stplugin = stplugin_dir(&steam_path);
+    let plugin = plugin_dir(&steam_path);
 
-    let own_lua = stplugin.join(format!("{}.lua", dlc_id));
+    let own_lua = plugin.join(format!("{}.lua", dlc_id));
     if own_lua.exists() {
         remove_manifest_files(&steam_path, &dlc_id.to_string());
     }
 
-    let main_lua = stplugin.join(format!("{}.lua", main_app_id));
+    let main_lua = plugin.join(format!("{}.lua", main_app_id));
     if main_lua.exists() {
         if let Ok(content) = fs::read_to_string(&main_lua) {
             let re = regex::Regex::new(&format!(r"(?m)^[^\S\r\n]*addappid\s*\(\s*{}\b.*\r?\n?", dlc_id))
@@ -373,6 +374,7 @@ pub fn uninstall_dlc(steam_path: String, main_app_id: u32, dlc_id: u32) -> Resul
     depots.insert(dlc_id.to_string());
     remove_depot_caches(&steam_path, &depots);
 
+    super::plugin::sync(&steam_path);
     Ok(())
 }
 

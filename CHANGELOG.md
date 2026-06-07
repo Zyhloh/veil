@@ -2,6 +2,18 @@
 
 All notable changes to Veil are documented here.
 
+## 2.1.0 — 2026-06-07
+
+### Changed
+
+- The Veil loader DLL is now `Veil.dll` (previously `xinput1_4.dll`); `dwmapi.dll` is unchanged.
+- Lua plugins are kept mirrored across both `config/veil-plugin` and `config/stplug-in`, so the new and legacy loaders both work. Manifests are unchanged.
+
+### Added
+
+- On startup, on library load, and periodically in the background, Veil keeps the two plugin folders in sync (newest copy wins). Installs and removals apply to both.
+- Veil removes the old `xinput1_4.dll` proxy on startup.
+
 ## 2.0.4 — 2026-06-06
 
 ### Added

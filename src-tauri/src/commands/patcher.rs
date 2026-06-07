@@ -10,7 +10,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-const XINPUT_URL: &str = "https://app.projectveil.cc/dll/xinput1_4.dll";
+const VEIL_URL: &str = "https://app.projectveil.cc/dll/Veil.dll";
 const DWMAPI_URL: &str = "https://app.projectveil.cc/dll/dwmapi.dll";
 const HASHES_URL: &str = "https://app.projectveil.cc/dll/hashes";
 
@@ -83,7 +83,7 @@ const AES_KEY: [u8; 32] = [
     0x47, 0x08, 0x6C, 0x00, 0x26, 0x93, 0x55, 0xCD, 0x51, 0xC9, 0x3A, 0x42, 0x3C, 0x14, 0x02, 0x94,
 ];
 
-const HIJACK_CANDIDATES: &[&str] = &["xinput1_4.dll", "dwmapi.dll"];
+const HIJACK_CANDIDATES: &[&str] = &["Veil.dll", "dwmapi.dll"];
 
 #[derive(Clone, Debug)]
 struct PatchTemplate {
@@ -983,7 +983,7 @@ async fn restore_dlls(steam_path: &Path) -> Result<bool, String> {
         Err(_) => HashMap::new(),
     };
 
-    let targets = [("xinput1_4.dll", XINPUT_URL), ("dwmapi.dll", DWMAPI_URL)];
+    let targets = [("Veil.dll", VEIL_URL), ("dwmapi.dll", DWMAPI_URL)];
     let mut restored = false;
     for (name, url) in targets {
         let path = steam_path.join(name);

@@ -13,9 +13,12 @@ use winreg::RegKey;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-const XINPUT_URL: &str = "https://app.projectveil.cc/dll/xinput1_4.dll";
+const VEIL_URL: &str = "https://app.projectveil.cc/dll/Veil.dll";
 const DWMAPI_URL: &str = "https://app.projectveil.cc/dll/dwmapi.dll";
 const HASHES_URL: &str = "https://app.projectveil.cc/dll/hashes";
+
+// Proxy DLL that previous versions deployed; replaced by Veil.dll.
+const LEGACY_DLL: &str = "xinput1_4.dll";
 
 const BUNDLED_PACKCODE: &[u8] = include_bytes!("../../resources/packcode.vdf");
 const BUNDLED_VERSION: &[u8] = include_bytes!("../../resources/version");
@@ -36,8 +39,21 @@ fn dll_targets(steam_path: &str) -> [DllTarget; 2] {
     let steam = Path::new(steam_path);
     [
         DllTarget { name: "dwmapi.dll", path: steam.join("dwmapi.dll"), url: DWMAPI_URL },
-        DllTarget { name: "xinput1_4.dll", path: steam.join("xinput1_4.dll"), url: XINPUT_URL },
+        DllTarget { name: "Veil.dll", path: steam.join("Veil.dll"), url: VEIL_URL },
     ]
+}
+
+/// Remove the legacy xinput1_4.dll proxy (replaced by Veil.dll) and keep the
+/// lua folders mirrored. Both `config/stplug-in` and `config/veil-plugin` are
+/// kept in sync, since the older loader DLL still reads stplug-in.
+fn cleanup_legacy(steam_path: &str) {
+    let old_dll = Path::new(steam_path).join(LEGACY_DLL);
+    if old_dll.exists() {
+        clear_readonly(&old_dll);
+        let _ = fs::remove_file(&old_dll);
+    }
+
+    super::plugin::sync(steam_path);
 }
 
 fn bundled_files(steam_path: &str) -> [BundledFile; 2] {
@@ -226,6 +242,8 @@ pub async fn verify_veil_dll(steam_path: String) -> Result<VerifyResult, String>
 
 #[tauri::command]
 pub async fn ensure_veil_dll(steam_path: String) -> Result<String, String> {
+    cleanup_legacy(&steam_path);
+
     let targets = dll_targets(&steam_path);
     let bundled = bundled_files(&steam_path);
 
@@ -291,6 +309,7 @@ pub fn remove_veil_dll(steam_path: String) -> Result<String, String> {
         .iter()
         .map(|t| t.path.clone())
         .chain(bundled.iter().map(|f| f.path.clone()))
+        .chain(std::iter::once(Path::new(&steam_path).join(LEGACY_DLL)))
         .collect();
 
     if !all_paths.iter().any(|p| p.exists()) {

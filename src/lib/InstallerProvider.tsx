@@ -180,6 +180,7 @@ export function InstallerProvider({ children }: { children: ReactNode }) {
     if (!ready) return
     const dllTimer = setInterval(async () => {
       const cfg = await getAppConfig().catch(() => null)
+      if (cfg?.steam_path) invoke('sync_plugins', { steamPath: cfg.steam_path }).catch(() => {})
       if (!cfg?.veil_enabled || !cfg.steam_path || cfg.patches_applied) return
       const v = await verifyVeilDll(cfg.steam_path).catch(() => null)
       if (v && !v.ok) {

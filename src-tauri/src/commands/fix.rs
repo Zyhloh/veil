@@ -156,7 +156,7 @@ async fn backfill_manifests(
 ) -> (u32, u32) {
     let lua_path = Path::new(steam_path)
         .join("config")
-        .join("stplug-in")
+        .join("veil-plugin")
         .join(format!("{}.lua", app_id));
     let lua = match fs::read_to_string(&lua_path) {
         Ok(c) => c,
@@ -222,8 +222,8 @@ pub async fn fix_library_manifests(
     steam_path: String,
     force: bool,
 ) -> Result<FixResult, String> {
-    let stplugin = Path::new(&steam_path).join("config").join("stplug-in");
-    if !stplugin.exists() {
+    let plugin = Path::new(&steam_path).join("config").join("veil-plugin");
+    if !plugin.exists() {
         return Ok(FixResult::default());
     }
 
@@ -234,7 +234,7 @@ pub async fn fix_library_manifests(
     }
 
     let mut app_ids: Vec<String> = Vec::new();
-    if let Ok(entries) = fs::read_dir(&stplugin) {
+    if let Ok(entries) = fs::read_dir(&plugin) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) != Some("lua") {
@@ -294,7 +294,7 @@ pub async fn fix_library_manifests(
                 };
                 match lua_from_zip(bytes.as_ref()) {
                     Some(new_lua) => {
-                        let lua_path = stplugin.join(format!("{}.lua", app_id));
+                        let lua_path = plugin.join(format!("{}.lua", app_id));
                         let old = fs::read_to_string(&lua_path).unwrap_or_default();
                         let merged = preserve_appends(&old, &new_lua);
                         if merged.trim() == old.trim() {
@@ -330,5 +330,6 @@ pub async fn fix_library_manifests(
     save_cache(&cache);
     let _ = app.emit("fix-progress", String::new());
 
+    super::plugin::sync(&steam_path);
     Ok(result)
 }

@@ -45,9 +45,9 @@ fn list_user_ids(steam_path: &Path) -> Vec<String> {
 }
 
 fn collect_installed_app_ids(steam_path: &Path) -> Vec<u64> {
-    let stplugin = steam_path.join("config").join("stplug-in");
+    let plugin = steam_path.join("config").join("veil-plugin");
     let mut ids = Vec::new();
-    let entries = match fs::read_dir(&stplugin) {
+    let entries = match fs::read_dir(&plugin) {
         Ok(e) => e,
         Err(_) => return ids,
     };
