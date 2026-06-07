@@ -15,10 +15,8 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 const VEIL_URL: &str = "https://app.projectveil.cc/dll/Veil.dll";
 const DWMAPI_URL: &str = "https://app.projectveil.cc/dll/dwmapi.dll";
+const XINPUT_URL: &str = "https://app.projectveil.cc/dll/xinput1_4.dll";
 const HASHES_URL: &str = "https://app.projectveil.cc/dll/hashes";
-
-// Proxy DLL that previous versions deployed; replaced by Veil.dll.
-const LEGACY_DLL: &str = "xinput1_4.dll";
 
 const BUNDLED_PACKCODE: &[u8] = include_bytes!("../../resources/packcode.vdf");
 const BUNDLED_VERSION: &[u8] = include_bytes!("../../resources/version");
@@ -28,6 +26,9 @@ struct DllTarget {
     name: &'static str,
     path: PathBuf,
     url: &'static str,
+    // Best-effort: a download/repair failure for this DLL is non-fatal (e.g. the
+    // endpoint may not serve it yet).
+    optional: bool,
 }
 
 struct BundledFile {
@@ -35,25 +36,13 @@ struct BundledFile {
     data: &'static [u8],
 }
 
-fn dll_targets(steam_path: &str) -> [DllTarget; 2] {
+fn dll_targets(steam_path: &str) -> [DllTarget; 3] {
     let steam = Path::new(steam_path);
     [
-        DllTarget { name: "dwmapi.dll", path: steam.join("dwmapi.dll"), url: DWMAPI_URL },
-        DllTarget { name: "Veil.dll", path: steam.join("Veil.dll"), url: VEIL_URL },
+        DllTarget { name: "dwmapi.dll", path: steam.join("dwmapi.dll"), url: DWMAPI_URL, optional: false },
+        DllTarget { name: "Veil.dll", path: steam.join("Veil.dll"), url: VEIL_URL, optional: false },
+        DllTarget { name: "xinput1_4.dll", path: steam.join("xinput1_4.dll"), url: XINPUT_URL, optional: true },
     ]
-}
-
-/// Remove the legacy xinput1_4.dll proxy (replaced by Veil.dll) and keep the
-/// lua folders mirrored. Both `config/stplug-in` and `config/veil-plugin` are
-/// kept in sync, since the older loader DLL still reads stplug-in.
-fn cleanup_legacy(steam_path: &str) {
-    let old_dll = Path::new(steam_path).join(LEGACY_DLL);
-    if old_dll.exists() {
-        clear_readonly(&old_dll);
-        let _ = fs::remove_file(&old_dll);
-    }
-
-    super::plugin::sync(steam_path);
 }
 
 fn bundled_files(steam_path: &str) -> [BundledFile; 2] {
@@ -242,8 +231,6 @@ pub async fn verify_veil_dll(steam_path: String) -> Result<VerifyResult, String>
 
 #[tauri::command]
 pub async fn ensure_veil_dll(steam_path: String) -> Result<String, String> {
-    cleanup_legacy(&steam_path);
-
     let targets = dll_targets(&steam_path);
     let bundled = bundled_files(&steam_path);
 
@@ -268,10 +255,21 @@ pub async fn ensure_veil_dll(steam_path: String) -> Result<String, String> {
 
     for i in &bad_indices {
         let t = &targets[*i];
-        let data = download_dll(t).await?;
+        let data = match download_dll(t).await {
+            Ok(d) => d,
+            Err(e) => {
+                if t.optional {
+                    continue;
+                }
+                return Err(e);
+            }
+        };
         if let Some(hashes) = remote.as_ref() {
             if let Some(expected) = hashes.get(t.name) {
                 if !sha256_hex(&data).eq_ignore_ascii_case(expected) {
+                    if t.optional {
+                        continue;
+                    }
                     return Err(format!("{}: hash mismatch after download", t.name));
                 }
             }
@@ -309,7 +307,6 @@ pub fn remove_veil_dll(steam_path: String) -> Result<String, String> {
         .iter()
         .map(|t| t.path.clone())
         .chain(bundled.iter().map(|f| f.path.clone()))
-        .chain(std::iter::once(Path::new(&steam_path).join(LEGACY_DLL)))
         .collect();
 
     if !all_paths.iter().any(|p| p.exists()) {

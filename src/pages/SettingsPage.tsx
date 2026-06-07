@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { invoke } from '@tauri-apps/api/core'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import {
   FolderOpen,
@@ -24,8 +23,6 @@ import {
   resolveDumpPath,
   ensureVeilDll,
   removeVeilDll,
-  syncVeilCategory,
-  removeVeilCategory,
   resetSteamInstall,
   downloadAndRunUpdate,
   type AppConfig,
@@ -212,10 +209,9 @@ function ResetModal({
 
 export default function SettingsPage() {
   const { steamPath, setSteamPath } = useLibrary()
-  const { updateInfo, refreshUpdate, setRestartRequired, notify } = useInstaller()
+  const { updateInfo, refreshUpdate, notify } = useInstaller()
   const [config, setConfig] = useState<AppConfig | null>(null)
   const [veilBusy, setVeilBusy] = useState(false)
-  const [catBusy, setCatBusy] = useState(false)
   const [checking, setChecking] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [resetPhase, setResetPhase] = useState<'idle' | 'confirm' | 'running' | 'done'>('idle')
@@ -252,31 +248,6 @@ export default function SettingsPage() {
       setVeilBusy(false)
     }
   }, [config, veilBusy, persist, notify])
-
-  const toggleCategory = useCallback(async () => {
-    if (!config || catBusy) return
-    const next = { ...config, veil_category: !config.veil_category }
-    await persist(next)
-    if (!config.steam_path) return
-    setCatBusy(true)
-    try {
-      // Steam rewrites its collections on exit, so close it first for the change to stick.
-      const running = await invoke<boolean>('check_steam_running').catch(() => false)
-      if (running) await invoke('kill_steam').catch(() => {})
-      if (next.veil_category) {
-        await syncVeilCategory(config.steam_path)
-        notify('success', 'Veil collection enabled')
-      } else {
-        await removeVeilCategory(config.steam_path)
-        notify('success', 'Veil collection removed')
-      }
-      if (running) setRestartRequired(true)
-    } catch (e) {
-      notify('error', e instanceof Error ? e.message : String(e))
-    } finally {
-      setCatBusy(false)
-    }
-  }, [config, catBusy, persist, notify, setRestartRequired])
 
   const changePath = useCallback(async () => {
     const dir = await openDialog({
@@ -354,21 +325,6 @@ export default function SettingsPage() {
               <CircleNotch size={18} className="animate-spin text-neutral-500" />
             ) : (
               <Toggle on={!!config?.veil_enabled} onClick={toggleVeil} disabled={!config} />
-            )}
-          </Row>
-          <div className="my-4 border-t border-white/[0.05]" />
-          <Row
-            label="Veil collection"
-            desc={
-              catBusy
-                ? 'Updating Steam collections…'
-                : 'Groups your Veil games into a “Veil” collection in your Steam library, kept in sync automatically.'
-            }
-          >
-            {catBusy ? (
-              <CircleNotch size={18} className="animate-spin text-neutral-500" />
-            ) : (
-              <Toggle on={!!config?.veil_category} onClick={toggleCategory} disabled={!config} />
             )}
           </Row>
         </Section>

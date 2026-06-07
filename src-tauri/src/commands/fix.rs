@@ -154,13 +154,9 @@ async fn backfill_manifests(
     app_id: &str,
     present: &BTreeSet<String>,
 ) -> (u32, u32) {
-    let lua_path = Path::new(steam_path)
-        .join("config")
-        .join("veil-plugin")
-        .join(format!("{}.lua", app_id));
-    let lua = match fs::read_to_string(&lua_path) {
-        Ok(c) => c,
-        Err(_) => return (0, 0),
+    let lua = match super::plugin::read_lua(steam_path, app_id) {
+        Some(c) => c,
+        None => return (0, 0),
     };
 
     let mut missing: Vec<(String, Option<String>)> = parse_depots(&lua)
@@ -222,31 +218,19 @@ pub async fn fix_library_manifests(
     steam_path: String,
     force: bool,
 ) -> Result<FixResult, String> {
-    let plugin = Path::new(&steam_path).join("config").join("veil-plugin");
-    if !plugin.exists() {
-        return Ok(FixResult::default());
-    }
-
     let mut cache = load_cache();
     let now = now_secs();
     if !force && now.saturating_sub(cache.last_check) < CHECK_INTERVAL_SECS {
         return Ok(FixResult::default());
     }
 
-    let mut app_ids: Vec<String> = Vec::new();
-    if let Ok(entries) = fs::read_dir(&plugin) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("lua") {
-                continue;
-            }
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                if !stem.is_empty() && stem.chars().all(|c| c.is_ascii_digit()) {
-                    app_ids.push(stem.to_string());
-                }
-            }
-        }
-    }
+    let app_ids: Vec<String> = super::plugin::lua_names(&steam_path)
+        .into_iter()
+        .filter_map(|name| {
+            let stem = name.strip_suffix(".lua").unwrap_or(&name).to_string();
+            (!stem.is_empty() && stem.chars().all(|c| c.is_ascii_digit())).then_some(stem)
+        })
+        .collect();
     if app_ids.is_empty() {
         return Ok(FixResult::default());
     }
@@ -294,18 +278,14 @@ pub async fn fix_library_manifests(
                 };
                 match lua_from_zip(bytes.as_ref()) {
                     Some(new_lua) => {
-                        let lua_path = plugin.join(format!("{}.lua", app_id));
-                        let old = fs::read_to_string(&lua_path).unwrap_or_default();
+                        let old = super::plugin::read_lua(&steam_path, app_id).unwrap_or_default();
                         let merged = preserve_appends(&old, &new_lua);
                         if merged.trim() == old.trim() {
                             result.skipped += 1;
+                        } else if super::plugin::write_to_all(&steam_path, &format!("{}.lua", app_id), merged.as_bytes()).is_ok() {
+                            result.updated += 1;
                         } else {
-                            let tmp = lua_path.with_extension("lua.tmp");
-                            if fs::write(&tmp, &merged).is_ok() && fs::rename(&tmp, &lua_path).is_ok() {
-                                result.updated += 1;
-                            } else {
-                                result.failed += 1;
-                            }
+                            result.failed += 1;
                         }
                         if let Some(e) = etag {
                             cache.etags.insert(app_id.clone(), e);
@@ -330,6 +310,5 @@ pub async fn fix_library_manifests(
     save_cache(&cache);
     let _ = app.emit("fix-progress", String::new());
 
-    super::plugin::sync(&steam_path);
     Ok(result)
 }

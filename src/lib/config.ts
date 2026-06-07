@@ -4,7 +4,6 @@ export interface AppConfig {
   steam_path: string
   dump_path: string
   veil_enabled: boolean
-  veil_category: boolean
   patches_applied: boolean
 }
 
@@ -37,25 +36,6 @@ export function removeVeilDll(steamPath: string): Promise<string> {
 
 export function verifyVeilDll(steamPath: string): Promise<VerifyResult> {
   return invoke('verify_veil_dll', { steamPath })
-}
-
-export interface CategorySyncResult {
-  users_updated: number
-  users_skipped: number
-  users_repaired: number
-  apps_in_category: number
-}
-
-export function syncVeilCategory(steamPath: string): Promise<CategorySyncResult> {
-  return invoke('sync_veil_category', { steamPath })
-}
-
-export function veilCategoryNeedsSync(steamPath: string): Promise<boolean> {
-  return invoke('veil_category_needs_sync', { steamPath })
-}
-
-export function removeVeilCategory(steamPath: string): Promise<CategorySyncResult> {
-  return invoke('remove_veil_category', { steamPath })
 }
 
 export interface ResetResult {

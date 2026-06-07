@@ -35,7 +35,7 @@ struct CachedMeta {
 }
 
 fn plugin_dir(steam_path: &str) -> PathBuf {
-    PathBuf::from(steam_path).join("config").join("veil-plugin")
+    super::plugin::primary_dir(steam_path)
 }
 
 #[tauri::command]
@@ -106,9 +106,8 @@ fn find_install_dir(libraries: &[PathBuf], app_id: &str) -> Option<String> {
 
 #[tauri::command]
 pub fn list_installed_games(steam_path: String) -> Result<Vec<InstalledGame>, String> {
-    super::plugin::sync(&steam_path);
-    let dir = plugin_dir(&steam_path);
-    if !dir.exists() {
+    let names = super::plugin::lua_names(&steam_path);
+    if names.is_empty() {
         return Ok(Vec::new());
     }
 
@@ -118,20 +117,13 @@ pub fn list_installed_games(steam_path: String) -> Result<Vec<InstalledGame>, St
     let libraries = steam_libraries(&steam_path);
 
     let mut games = Vec::new();
-    for entry in fs::read_dir(&dir).map_err(|e| e.to_string())?.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("lua") {
-            continue;
-        }
-        let stem = match path.file_stem().and_then(|s| s.to_str()) {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
+    for name in names {
+        let stem = name.strip_suffix(".lua").unwrap_or(&name).to_string();
         if stem.is_empty() || !stem.chars().all(|c| c.is_ascii_digit()) {
             continue;
         }
 
-        let content = fs::read_to_string(&path).unwrap_or_default();
+        let content = super::plugin::read_lua(&steam_path, &stem).unwrap_or_default();
 
         let mut included: BTreeSet<u32> = BTreeSet::new();
         for cap in app_re.captures_iter(&content) {
@@ -332,11 +324,9 @@ fn remove_depot_caches(steam_path: &str, depots: &BTreeSet<String>) {
 }
 
 fn remove_manifest_files(steam_path: &str, app_id: &str) {
-    let lua_path = plugin_dir(steam_path).join(format!("{}.lua", app_id));
-
     let mut depots: BTreeSet<String> = BTreeSet::new();
     if let Ok(re) = regex::Regex::new(r#"addappid\s*\(\s*(\d+)\s*,\s*\d+\s*,\s*"[a-fA-F0-9]+""#) {
-        if let Ok(content) = fs::read_to_string(&lua_path) {
+        if let Some(content) = super::plugin::read_lua(steam_path, app_id) {
             for cap in re.captures_iter(&content) {
                 depots.insert(cap[1].to_string());
             }
@@ -349,24 +339,17 @@ fn remove_manifest_files(steam_path: &str, app_id: &str) {
 
 #[tauri::command]
 pub fn uninstall_dlc(steam_path: String, main_app_id: u32, dlc_id: u32) -> Result<(), String> {
-    let plugin = plugin_dir(&steam_path);
-
-    let own_lua = plugin.join(format!("{}.lua", dlc_id));
-    if own_lua.exists() {
+    if super::plugin::read_lua(&steam_path, &dlc_id.to_string()).is_some() {
         remove_manifest_files(&steam_path, &dlc_id.to_string());
     }
 
-    let main_lua = plugin.join(format!("{}.lua", main_app_id));
-    if main_lua.exists() {
-        if let Ok(content) = fs::read_to_string(&main_lua) {
-            let re = regex::Regex::new(&format!(r"(?m)^[^\S\r\n]*addappid\s*\(\s*{}\b.*\r?\n?", dlc_id))
+    if let Some(content) = super::plugin::read_lua(&steam_path, &main_app_id.to_string()) {
+        let re = regex::Regex::new(&format!(r"(?m)^[^\S\r\n]*addappid\s*\(\s*{}\b.*\r?\n?", dlc_id))
+            .map_err(|e| e.to_string())?;
+        let next = re.replace_all(&content, "").to_string();
+        if next != content {
+            super::plugin::write_to_all(&steam_path, &format!("{}.lua", main_app_id), next.as_bytes())
                 .map_err(|e| e.to_string())?;
-            let next = re.replace_all(&content, "").to_string();
-            if next != content {
-                let tmp = main_lua.with_extension("lua.tmp");
-                fs::write(&tmp, &next).map_err(|e| e.to_string())?;
-                fs::rename(&tmp, &main_lua).map_err(|e| e.to_string())?;
-            }
         }
     }
 
@@ -374,7 +357,6 @@ pub fn uninstall_dlc(steam_path: String, main_app_id: u32, dlc_id: u32) -> Resul
     depots.insert(dlc_id.to_string());
     remove_depot_caches(&steam_path, &depots);
 
-    super::plugin::sync(&steam_path);
     Ok(())
 }
 

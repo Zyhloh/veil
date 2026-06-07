@@ -542,24 +542,17 @@ async fn resolve_lua(client: &reqwest::Client, app_id: u32) -> Option<String> {
 }
 
 async fn install_one(client: &reqwest::Client, steam_path: &str, app_id: u32) -> bool {
-    let plugin = Path::new(steam_path).join("config").join("veil-plugin");
-    if fs::create_dir_all(&plugin).is_err() {
-        return false;
-    }
     if let Some(lua) = resolve_lua(client, app_id).await {
-        return fs::write(plugin.join(format!("{}.lua", app_id)), lua.as_bytes()).is_ok();
+        return super::plugin::write_to_all(steam_path, &format!("{}.lua", app_id), lua.as_bytes()).is_ok();
     }
     let branch = app_id.to_string();
     do_install(steam_path, app_id, &branch, &branch).await.is_ok()
 }
 
 async fn do_install(steam_path: &str, app_id: u32, lua_ref: &str, tree_ref: &str) -> Result<(), String> {
-    let plugin = Path::new(steam_path).join("config").join("veil-plugin");
-    fs::create_dir_all(&plugin).map_err(|e| e.to_string())?;
-
     let client = http_client()?;
     let lua = fetch_lua(&client, app_id, lua_ref).await?;
-    fs::write(plugin.join(format!("{}.lua", app_id)), &lua).map_err(|e| e.to_string())?;
+    super::plugin::write_to_all(steam_path, &format!("{}.lua", app_id), &lua).map_err(|e| e.to_string())?;
 
     let manifests = fetch_manifests(&client, tree_ref).await;
     if !manifests.is_empty() {
@@ -579,9 +572,7 @@ async fn do_install(steam_path: &str, app_id: u32, lua_ref: &str, tree_ref: &str
 #[tauri::command]
 pub async fn catalog_install(app_id: u32, steam_path: String) -> Result<(), String> {
     let client = http_client()?;
-    let ok = install_one(&client, &steam_path, app_id).await;
-    super::plugin::sync(&steam_path);
-    if ok {
+    if install_one(&client, &steam_path, app_id).await {
         Ok(())
     } else {
         Err(format!("No manifest available for app {}", app_id))
@@ -594,9 +585,7 @@ pub async fn catalog_install_at(
     steam_path: String,
     commit_sha: String,
 ) -> Result<(), String> {
-    let result = do_install(&steam_path, app_id, &commit_sha, &commit_sha).await;
-    super::plugin::sync(&steam_path);
-    result
+    do_install(&steam_path, app_id, &commit_sha, &commit_sha).await
 }
 
 #[derive(Serialize)]
@@ -631,9 +620,6 @@ pub async fn catalog_install_selection(
     install_main: bool,
     dlcs: Vec<(u32, String)>,
 ) -> Result<SelectionResult, String> {
-    let plugin = Path::new(&steam_path).join("config").join("veil-plugin");
-    fs::create_dir_all(&plugin).map_err(|e| e.to_string())?;
-    let main_lua = plugin.join(format!("{}.lua", main_app_id));
     let client = http_client()?;
 
     let total = install_main as u32 + dlcs.len() as u32;
@@ -672,11 +658,11 @@ pub async fn catalog_install_selection(
 
     let mut appended = 0u32;
     if !to_append.is_empty() {
-        if !main_lua.exists() {
+        let main_name = format!("{}.lua", main_app_id);
+        if super::plugin::read_lua(&steam_path, &main_app_id.to_string()).is_none() {
             install_one(&client, &steam_path, main_app_id).await;
         }
-        if main_lua.exists() {
-            let content = fs::read_to_string(&main_lua).unwrap_or_default();
+        if let Some(content) = super::plugin::read_lua(&steam_path, &main_app_id.to_string()) {
             let mut next = content.clone();
             let mut newly: Vec<u32> = Vec::new();
             for (id, name) in &to_append {
@@ -693,8 +679,7 @@ pub async fn catalog_install_selection(
             let write_ok = if newly.is_empty() {
                 true
             } else {
-                let tmp = main_lua.with_extension("lua.tmp");
-                fs::write(&tmp, &next).is_ok() && fs::rename(&tmp, &main_lua).is_ok()
+                super::plugin::write_to_all(&steam_path, &main_name, next.as_bytes()).is_ok()
             };
             if write_ok {
                 appended = newly.len() as u32;
@@ -715,7 +700,6 @@ pub async fn catalog_install_selection(
         }
     }
 
-    super::plugin::sync(&steam_path);
     Ok(SelectionResult { statuses, appended })
 }
 

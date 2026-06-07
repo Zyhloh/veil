@@ -1,6 +1,5 @@
 pub mod bypasses;
 pub mod catalog;
-pub mod categories;
 pub mod cloudsave;
 pub mod config;
 pub mod dumper;

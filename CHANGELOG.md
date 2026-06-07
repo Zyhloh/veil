@@ -2,6 +2,18 @@
 
 All notable changes to Veil are documented here.
 
+## 2.1.5 — 2026-06-07
+
+### Changed
+
+- The Veil collection in your Steam library is now managed entirely by the loader DLL — the app no longer syncs it, and the Settings toggle for it has been removed.
+- Installed luas now go into `config/Veil` (alongside `config/stplug-in`); the `veil-plugin` folder is no longer used.
+- `xinput1_4.dll` is once again a managed loader DLL alongside `dwmapi.dll` and `Veil.dll` — hash-checked and replaced on startup/in the background rather than deleted.
+
+### Removed
+
+- App-side mirroring of lua folders. Installs/removals still write to both folders; keeping them in sync is now handled by the DLL.
+
 ## 2.1.1 — 2026-06-07
 
 ### Fixed

@@ -1,15 +1,20 @@
-use std::collections::HashMap;
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
 
-// Luas are kept mirrored across both folders: the new system reads veil-plugin,
-// while the older loader DLL still reads stplug-in.
-const FOLDERS: [&str; 2] = ["veil-plugin", "stplug-in"];
+// Installed luas are written to both folders: the loader DLL reads "Veil", and
+// "stplug-in" is kept populated for compatibility. The DLL mirrors between them
+// on startup, so the app only writes/deletes — it never compares or copies.
+const FOLDERS: [&str; 2] = ["Veil", "stplug-in"];
 
 pub fn dirs(steam_path: &str) -> [PathBuf; 2] {
     let cfg = Path::new(steam_path).join("config");
     [cfg.join(FOLDERS[0]), cfg.join(FOLDERS[1])]
+}
+
+/// The folder used for "open plugin folder" and as the primary loader folder.
+pub fn primary_dir(steam_path: &str) -> PathBuf {
+    Path::new(steam_path).join("config").join(FOLDERS[0])
 }
 
 fn unset_readonly(path: &Path) {
@@ -22,7 +27,21 @@ fn unset_readonly(path: &Path) {
     }
 }
 
-/// Delete a `<app_id>.lua` from every plugin folder.
+/// Write a file by name into every plugin folder.
+pub fn write_to_all(steam_path: &str, name: &str, data: &[u8]) -> std::io::Result<()> {
+    let mut result = Ok(());
+    for d in dirs(steam_path) {
+        let _ = fs::create_dir_all(&d);
+        let p = d.join(name);
+        unset_readonly(&p);
+        if let Err(e) = fs::write(&p, data) {
+            result = Err(e);
+        }
+    }
+    result
+}
+
+/// Delete `<app_id>.lua` from every plugin folder.
 pub fn remove_lua(steam_path: &str, app_id: &str) {
     let name = format!("{}.lua", app_id);
     for d in dirs(steam_path) {
@@ -34,59 +53,31 @@ pub fn remove_lua(steam_path: &str, app_id: &str) {
     }
 }
 
-/// Mirror luas so both folders hold the union, newest copy winning. Additive
-/// only — deletions are handled at the delete sites so nothing is resurrected.
-pub fn sync(steam_path: &str) {
-    let ds = dirs(steam_path);
-    for d in &ds {
-        let _ = fs::create_dir_all(d);
-    }
-
-    let mut newest: HashMap<String, (PathBuf, SystemTime)> = HashMap::new();
-    for d in &ds {
-        let Ok(entries) = fs::read_dir(d) else { continue };
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if !p.is_file() {
-                continue;
-            }
-            if p.extension().and_then(|x| x.to_str()).map(|x| x.eq_ignore_ascii_case("lua")) != Some(true) {
-                continue;
-            }
-            let Some(name) = p.file_name().and_then(|n| n.to_str()).map(|s| s.to_string()) else { continue };
-            let m = entry.metadata().and_then(|md| md.modified()).unwrap_or(SystemTime::UNIX_EPOCH);
-            newest
-                .entry(name)
-                .and_modify(|cur| {
-                    if m > cur.1 {
-                        *cur = (p.clone(), m)
-                    }
-                })
-                .or_insert((p, m));
+/// Read `<app_id>.lua` from whichever folder has it.
+pub fn read_lua(steam_path: &str, app_id: &str) -> Option<String> {
+    let name = format!("{}.lua", app_id);
+    for d in dirs(steam_path) {
+        if let Ok(c) = fs::read_to_string(d.join(&name)) {
+            return Some(c);
         }
     }
-
-    for (name, (src, _)) in &newest {
-        let Ok(data) = fs::read(src) else { continue };
-        for d in &ds {
-            let dest = d.join(name);
-            let differs = match fs::read(&dest) {
-                Ok(cur) => cur != data,
-                Err(_) => true,
-            };
-            if differs {
-                unset_readonly(&dest);
-                let _ = fs::write(&dest, &data);
-            }
-        }
-    }
+    None
 }
 
-#[tauri::command]
-pub fn sync_plugins(steam_path: String) -> Result<(), String> {
-    if steam_path.is_empty() {
-        return Ok(());
+/// Distinct `*.lua` filenames present across all plugin folders.
+pub fn lua_names(steam_path: &str) -> Vec<String> {
+    let mut set = BTreeSet::new();
+    for d in dirs(steam_path) {
+        if let Ok(entries) = fs::read_dir(&d) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.extension().and_then(|x| x.to_str()) == Some("lua") {
+                    if let Some(n) = p.file_name().and_then(|n| n.to_str()) {
+                        set.insert(n.to_string());
+                    }
+                }
+            }
+        }
     }
-    sync(&steam_path);
-    Ok(())
+    set.into_iter().collect()
 }

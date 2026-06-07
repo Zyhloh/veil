@@ -2,7 +2,7 @@
 
 A modern Steam manifest manager for Windows. Veil installs game manifests into Steam, keeps them up to date, and bundles the tools around them — a catalog, a manifest dumper, a DLL patcher, cloud-save redirection, and per-game bypasses — behind one clean interface.
 
-Veil 2 is a full ground-up rewrite built on Tauri 2 (Rust + WebView2) with a React front end. The current release is **2.1.1**.
+Veil 2 is a full ground-up rewrite built on Tauri 2 (Rust + WebView2) with a React front end. The current release is **2.1.5**.
 
 ## Download
 

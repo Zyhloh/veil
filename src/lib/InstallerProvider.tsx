@@ -10,8 +10,6 @@ import {
   getAppConfig,
   ensureVeilDll,
   verifyVeilDll,
-  syncVeilCategory,
-  veilCategoryNeedsSync,
   checkForUpdate,
   type UpdateInfo,
 } from './config'
@@ -74,11 +72,6 @@ export function InstallerProvider({ children }: { children: ReactNode }) {
         await fixLibraryManifests(steamPath, true).catch(() => null)
         await reload()
 
-        const cfg = await getAppConfig().catch(() => null)
-        if (cfg?.veil_category) {
-          await syncVeilCategory(steamPath).catch(() => null)
-        }
-
         let label = 'Manifests'
         if (report.app_ids.length === 1) {
           const metas = await getAppsMeta(report.app_ids).catch(() => [])
@@ -135,20 +128,6 @@ export function InstallerProvider({ children }: { children: ReactNode }) {
         if (res === 'repaired') await invoke('start_steam').catch(() => {})
       }
 
-      if (cfg?.veil_category && sp) {
-        step('Syncing collections', 70)
-        try {
-          if (await veilCategoryNeedsSync(sp)) {
-            const running = await invoke<boolean>('check_steam_running').catch(() => false)
-            if (running) await invoke('kill_steam').catch(() => {})
-            await syncVeilCategory(sp).catch(() => {})
-            if (running) await invoke('start_steam').catch(() => {})
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-
       if (sp && cfg?.veil_enabled) {
         step('Setting up Cloud Saves', 84)
         const status = await cloudSavesEnsure(sp).catch(() => null)
@@ -180,7 +159,6 @@ export function InstallerProvider({ children }: { children: ReactNode }) {
     if (!ready) return
     const dllTimer = setInterval(async () => {
       const cfg = await getAppConfig().catch(() => null)
-      if (cfg?.steam_path) invoke('sync_plugins', { steamPath: cfg.steam_path }).catch(() => {})
       if (!cfg?.veil_enabled || !cfg.steam_path || cfg.patches_applied) return
       const v = await verifyVeilDll(cfg.steam_path).catch(() => null)
       if (v && !v.ok) {

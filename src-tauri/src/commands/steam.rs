@@ -101,19 +101,7 @@ fn steam_exe() -> Result<PathBuf, String> {
     Ok(path)
 }
 
-// Steam rewrites its collections on exit, so the Veil collection only sticks
-// when written while Steam is down. Every Veil-initiated launch goes through
-// here with Steam stopped, so sync the collection right before starting it.
-fn sync_veil_category_if_enabled() {
-    if let Ok(cfg) = super::config::get_app_config() {
-        if cfg.veil_category && !cfg.steam_path.is_empty() {
-            let _ = super::categories::sync_veil_category(cfg.steam_path);
-        }
-    }
-}
-
 fn spawn_steam() -> Result<(), String> {
-    sync_veil_category_if_enabled();
     let exe = steam_exe()?;
     let mut cmd = Command::new(&exe);
     cmd.stdout(Stdio::null()).stderr(Stdio::null());
