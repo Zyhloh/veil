@@ -212,34 +212,22 @@ fn set_log_pref(enabled: bool) {
     }
 }
 
-fn set_steam_ver(ver: &str) {
-    if let Ok(mut cfg) = get_app_config() {
-        if cfg.cloud_saves_steam_ver != ver {
-            cfg.cloud_saves_steam_ver = ver.to_string();
-            let _ = save_app_config(cfg);
-        }
+/// Remove cloud_redirect.dll so the Veil loader stops loading it. Closes Steam
+/// if a loaded copy blocks deletion.
+async fn remove_dll_forced(steam_path: &str) {
+    let dest = dll_path(steam_path);
+    if !dest.exists() {
+        return;
     }
-}
-
-/// Steam client build from package/steam_client_win64.manifest, used to detect
-/// Steam updates that may invalidate the patched (locked) payload.
-fn steam_client_version(steam_path: &str) -> Option<String> {
-    let manifest = Path::new(steam_path)
-        .join("package")
-        .join("steam_client_win64.manifest");
-    let text = fs::read_to_string(manifest).ok()?;
-    for line in text.lines() {
-        let t = line.trim();
-        if t.starts_with("\"version\"") {
-            let last = t.rfind('"')?;
-            let prev = t[..last].rfind('"')?;
-            let val = t[prev + 1..last].trim();
-            if !val.is_empty() && val.bytes().all(|b| b.is_ascii_digit()) {
-                return Some(val.to_string());
-            }
+    clear_readonly(&dest);
+    if fs::remove_file(&dest).is_err() {
+        if super::steam::check_steam_running() {
+            let _ = super::steam::kill_steam().await;
+            std::thread::sleep(std::time::Duration::from_millis(800));
         }
+        clear_readonly(&dest);
+        let _ = fs::remove_file(&dest);
     }
-    None
 }
 
 /// Write the folder config only when it differs, to avoid needless rewrites.
@@ -275,33 +263,15 @@ pub fn cloud_saves_status(steam_path: String) -> Result<CloudSavesStatus, String
     Ok(build_status(&steam_path))
 }
 
-/// Startup reconcile: if cloud saves are on, make the deployed DLL, payload
-/// patch, config, and log state match the saved preferences — re-patching after
-/// a Steam update wipes the cache. Idempotent and resilient (never hard-fails
-/// startup); the explicit enable/disable commands surface real errors instead.
+/// Startup reconcile: when cloud saves are on, keep cloud_redirect.dll present
+/// and current and the config in sync. The Veil loader DLLs detect the file and
+/// load it into Steam, so the app only deploys it — no payload patching.
+/// Resilient: never hard-fails startup.
 #[tauri::command]
 pub async fn cloud_saves_ensure(steam_path: String) -> Result<CloudSavesStatus, String> {
     let cfg = get_app_config().unwrap_or_default();
     if !cfg.cloud_saves_enabled {
         return Ok(build_status(&steam_path));
-    }
-
-    let steam_running = super::steam::check_steam_running();
-    let cur_ver = steam_client_version(&steam_path);
-
-    // Self-heal: if Steam updated since we last patched, the locked old payload
-    // can't be swapped. Clear the caches so a fresh, compatible payload is
-    // fetched, restart Steam to pull it, and let the next launch re-patch.
-    if let Some(ref cur) = cur_ver {
-        if !cfg.cloud_saves_steam_ver.is_empty() && &cfg.cloud_saves_steam_ver != cur {
-            super::patcher::cloud_redirect_unlock_clear(Path::new(&steam_path));
-            set_steam_ver(cur);
-            apply_log_pref(&steam_path, cfg.cloud_saves_log);
-            if steam_running {
-                let _ = super::steam::restart_steam().await;
-            }
-            return Ok(build_status(&steam_path));
-        }
     }
 
     let folder = current_folder(&steam_path);
@@ -310,26 +280,7 @@ pub async fn cloud_saves_ensure(steam_path: String) -> Result<CloudSavesStatus, 
 
     let _ = ensure_dll(&steam_path).await;
 
-    // apply is idempotent: it re-locks already-patched caches and only rewrites
-    // ones Steam reverted (returning true), so this both heals and locks.
-    let mut changed = false;
-    if dll_path(&steam_path).exists() {
-        if let Ok(c) = super::patcher::cloud_redirect_apply(Path::new(&steam_path)) {
-            changed = c;
-            if let Some(ref cur) = cur_ver {
-                set_steam_ver(cur);
-            }
-        }
-    }
-
     apply_log_pref(&steam_path, cfg.cloud_saves_log);
-
-    // If we just (re)applied the hook while Steam was already running, restart it
-    // so the redirect takes effect now instead of after a manual restart.
-    if changed && steam_running {
-        let _ = super::steam::restart_steam().await;
-    }
-
     Ok(build_status(&steam_path))
 }
 
@@ -345,11 +296,10 @@ pub async fn cloud_saves_enable(steam_path: String, folder: String) -> Result<Cl
     fs::create_dir_all(&target).map_err(|e| format!("Failed to create folder: {}", e))?;
     write_folder_config(&target)?;
 
+    // Deploy cloud_redirect.dll into the Steam dir; the Veil loader loads it.
     let hashes = fetch_remote_hashes().await;
     let data = download_dll(hashes.as_ref()).await?;
     write_dll_forced(&steam_path, &data).await?;
-
-    super::patcher::cloud_redirect_apply(Path::new(&steam_path))?;
 
     let cfg = get_app_config().unwrap_or_default();
     apply_log_pref(&steam_path, cfg.cloud_saves_log);
@@ -360,7 +310,7 @@ pub async fn cloud_saves_enable(steam_path: String, folder: String) -> Result<Cl
 #[tauri::command]
 pub async fn cloud_saves_disable(steam_path: String) -> Result<CloudSavesStatus, String> {
     set_enabled_pref(false);
-    super::patcher::cloud_redirect_revert(Path::new(&steam_path))?;
+    remove_dll_forced(&steam_path).await;
     Ok(build_status(&steam_path))
 }
 

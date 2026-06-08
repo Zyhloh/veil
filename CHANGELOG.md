@@ -2,7 +2,13 @@
 
 All notable changes to Veil are documented here.
 
-## 2.1.5 — 2026-06-07
+## 2.2.0 — 2026-06-07
+
+### Changed
+
+- Cloud Saves no longer patches the Steam payload. The Veil loader DLLs detect and load `cloud_redirect.dll` directly, so enabling now just deploys the DLL (hash-checked) and writes its config, and disabling removes it. No more payload code-cave injection, read-only locking, or Steam-restart self-heal.
+
+## 2.1.6 — 2026-06-07
 
 ### Changed
 
@@ -12,6 +18,7 @@ All notable changes to Veil are documented here.
 
 ### Removed
 
+- The "SteamTools DLL Patches" entry from the Fixes tab.
 - App-side mirroring of lua folders. Installs/removals still write to both folders; keeping them in sync is now handled by the DLL.
 
 ## 2.1.1 — 2026-06-07

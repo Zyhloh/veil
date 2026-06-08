@@ -9,7 +9,6 @@ import Toast from './Toast'
 import LibraryPage from '../pages/LibraryPage'
 import CatalogPage from '../pages/CatalogPage'
 import FixesPage from '../pages/FixesPage'
-import PatcherPage from '../pages/PatcherPage'
 import ForzaFixPage from '../pages/ForzaFixPage'
 import BypassesPage from '../pages/BypassesPage'
 import DumperPage from '../pages/DumperPage'
@@ -59,7 +58,7 @@ const sections: { title: string; items: NavItem[] }[] = [
   },
 ]
 
-const FIX_PAGES = ['Patcher', 'ForzaFix']
+const FIX_PAGES = ['ForzaFix']
 
 const flatItems = [...sections.flatMap((s) => s.items)]
 
@@ -234,8 +233,6 @@ export default function MainShell() {
             <CatalogPage onNavigate={setActive} />
           ) : active === 'Fixes' ? (
             <FixesPage onNavigate={setActive} />
-          ) : active === 'Patcher' ? (
-            <PatcherPage onBack={() => setActive('Fixes')} />
           ) : active === 'ForzaFix' ? (
             <ForzaFixPage onBack={() => setActive('Fixes')} />
           ) : active === 'Bypasses' ? (

@@ -1,4 +1,4 @@
-import { Cube, GameController, CaretRight } from '@phosphor-icons/react'
+import { GameController, CaretRight } from '@phosphor-icons/react'
 import type { ComponentType } from 'react'
 
 type IconType = ComponentType<{ size?: number; weight?: 'regular' | 'fill' | 'bold'; className?: string }>
@@ -11,12 +11,6 @@ interface FixEntry {
 }
 
 const ENTRIES: FixEntry[] = [
-  {
-    id: 'Patcher',
-    title: 'SteamTools DLL Patches',
-    desc: 'Capcom cloud-save fix, offline first-run setup, and restore for the SteamTools core DLL.',
-    Icon: Cube,
-  },
   {
     id: 'ForzaFix',
     title: 'Forza Horizon 6 Fixer',

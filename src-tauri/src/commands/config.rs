@@ -11,7 +11,6 @@ pub struct AppConfig {
     pub patches_applied: bool,
     pub cloud_saves_enabled: bool,
     pub cloud_saves_log: bool,
-    pub cloud_saves_steam_ver: String,
 }
 
 impl Default for AppConfig {
@@ -23,7 +22,6 @@ impl Default for AppConfig {
             patches_applied: false,
             cloud_saves_enabled: false,
             cloud_saves_log: false,
-            cloud_saves_steam_ver: String::new(),
         }
     }
 }
