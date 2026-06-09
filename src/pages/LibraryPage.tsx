@@ -456,8 +456,6 @@ export default function LibraryPage() {
     })
   }, [])
 
-  // Look up online-fix.me availability for each app, throttled with backoff.
-  // Results are cached on disk by the backend, so repeat loads resolve instantly.
   useEffect(() => {
     if (!ready || !steamPath) return
     let cancelled = false

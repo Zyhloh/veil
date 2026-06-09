@@ -18,3 +18,11 @@ export interface InstallReport {
 export function installManifestPaths(steamPath: string, paths: string[]): Promise<InstallReport> {
   return invoke('install_manifest_paths', { steamPath, paths })
 }
+
+export function installManifestBlob(
+  steamPath: string,
+  name: string,
+  data: Uint8Array,
+): Promise<InstallReport> {
+  return invoke('install_manifest_blob', { steamPath, name, data })
+}

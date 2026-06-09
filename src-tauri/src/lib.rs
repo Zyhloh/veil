@@ -46,6 +46,7 @@ pub fn run() {
             commands::catalog::catalog_install_selection,
             commands::catalog::catalog_list_versions,
             commands::install::install_manifest_paths,
+            commands::install::install_manifest_blob,
             commands::fix::fix_library_manifests,
             commands::patcher::patcher_diagnose,
             commands::patcher::patcher_apply_capcom,

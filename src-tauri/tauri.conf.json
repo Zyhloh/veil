@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Veil",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "identifier": "com.zyhloh.veil",
   "build": {
     "frontendDist": "../dist",
@@ -38,7 +38,8 @@
         "transparent": true,
         "shadow": false,
         "center": true,
-        "visible": false
+        "visible": false,
+        "dragDropEnabled": false
       }
     ],
     "security": {

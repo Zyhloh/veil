@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
+import { invoke } from '@tauri-apps/api/core'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import {
   FolderOpen,
@@ -28,6 +29,7 @@ import {
   type AppConfig,
   type ResetResult,
 } from '../lib/config'
+import { cloudSavesEnsure } from '../lib/cloudsave'
 
 function Toggle({ on, onClick, disabled }: { on: boolean; onClick: () => void; disabled?: boolean }) {
   return (
@@ -295,6 +297,10 @@ export default function SettingsPage() {
     setResetPhase('running')
     try {
       const r = await resetSteamInstall(config.steam_path)
+      await invoke('kill_steam').catch(() => {})
+      if (config.veil_enabled) await ensureVeilDll(config.steam_path).catch(() => {})
+      await cloudSavesEnsure(config.steam_path).catch(() => {})
+      await invoke('start_steam').catch(() => {})
       setResetResult(r)
       setResetPhase('done')
     } catch (e) {

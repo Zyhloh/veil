@@ -121,9 +121,6 @@ async fn appdetails_header(app_id: &str) -> Option<String> {
     json[app_id]["data"]["header_image"].as_str().map(|s| s.to_string())
 }
 
-// Resolves a game's header art entirely server-side (CDN chain -> appdetails),
-// caches by app id, and returns a placeholder image (never a 404) so the
-// webview console stays quiet.
 async fn serve_app(app_id: &str) -> Response<Vec<u8>> {
     let file = images_dir().join(format!("app_{}", app_id));
     if let Ok(bytes) = fs::read(&file) {

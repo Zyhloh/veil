@@ -94,16 +94,15 @@ fn route(dest: &Dest, name: &str, data: &[u8]) -> Option<InstallEntry> {
     }
 }
 
-#[tauri::command]
-pub async fn install_manifest_paths(
-    app: AppHandle,
-    steam_path: String,
-    paths: Vec<String>,
+fn build_report(
+    app: &AppHandle,
+    steam_path: &str,
+    items: Vec<(String, Vec<u8>)>,
 ) -> Result<InstallReport, String> {
     let dest = Dest {
-        steam_path: steam_path.clone(),
-        depot_a: Path::new(&steam_path).join("config").join("depotcache"),
-        depot_b: Path::new(&steam_path).join("depotcache"),
+        steam_path: steam_path.to_string(),
+        depot_a: Path::new(steam_path).join("config").join("depotcache"),
+        depot_b: Path::new(steam_path).join("depotcache"),
     };
     fs::create_dir_all(&dest.depot_a).map_err(|e| e.to_string())?;
     fs::create_dir_all(&dest.depot_b).map_err(|e| e.to_string())?;
@@ -112,23 +111,13 @@ pub async fn install_manifest_paths(
     let mut seen: HashSet<String> = HashSet::new();
     let mut skipped = 0u32;
 
-    for path in &paths {
-        let p = Path::new(path);
-        let lower = p
-            .file_name()
-            .map(|n| n.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
+    for (name, data) in &items {
+        let base = basename(name);
+        let lower = base.to_lowercase();
 
         if lower.ends_with(".zip") {
-            let _ = app.emit("install-progress", format!("Extracting {}…", basename(path)));
-            let data = match fs::read(p) {
-                Ok(d) => d,
-                Err(_) => {
-                    skipped += 1;
-                    continue;
-                }
-            };
-            let mut archive = match zip::ZipArchive::new(std::io::Cursor::new(data)) {
+            let _ = app.emit("install-progress", format!("Extracting {}…", base));
+            let mut archive = match zip::ZipArchive::new(std::io::Cursor::new(data.as_slice())) {
                 Ok(a) => a,
                 Err(_) => {
                     skipped += 1;
@@ -143,8 +132,8 @@ pub async fn install_manifest_paths(
                 if zf.is_dir() {
                     continue;
                 }
-                let base = basename(zf.name());
-                let key = base.to_lowercase();
+                let zbase = basename(zf.name());
+                let key = zbase.to_lowercase();
                 if !(key.ends_with(".lua") || key.ends_with(".manifest")) {
                     continue;
                 }
@@ -155,29 +144,18 @@ pub async fn install_manifest_paths(
                 if zf.read_to_end(&mut buf).is_err() {
                     continue;
                 }
-                let _ = app.emit("install-progress", format!("Installing {}…", base));
-                if let Some(entry) = route(&dest, &base, &buf) {
+                let _ = app.emit("install-progress", format!("Installing {}…", zbase));
+                if let Some(entry) = route(&dest, &zbase, &buf) {
                     entries.push(entry);
                 }
             }
         } else if lower.ends_with(".lua") || lower.ends_with(".manifest") {
-            let base = basename(path);
-            if !seen.insert(base.to_lowercase()) {
+            if !seen.insert(lower.clone()) {
                 continue;
             }
-            match fs::read(p) {
-                Ok(data) => {
-                    let _ = app.emit("install-progress", format!("Installing {}…", base));
-                    if let Some(entry) = route(&dest, &base, &data) {
-                        entries.push(entry);
-                    }
-                }
-                Err(_) => entries.push(InstallEntry {
-                    name: base,
-                    kind: if lower.ends_with(".lua") { "lua" } else { "manifest" }.to_string(),
-                    app_id: None,
-                    status: "failed".to_string(),
-                }),
+            let _ = app.emit("install-progress", format!("Installing {}…", base));
+            if let Some(entry) = route(&dest, &base, data) {
+                entries.push(entry);
             }
         } else {
             skipped += 1;
@@ -203,4 +181,39 @@ pub async fn install_manifest_paths(
         skipped,
         app_ids,
     })
+}
+
+#[tauri::command]
+pub async fn install_manifest_paths(
+    app: AppHandle,
+    steam_path: String,
+    paths: Vec<String>,
+) -> Result<InstallReport, String> {
+    let mut items: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut unread = 0u32;
+    for path in &paths {
+        let base = basename(path);
+        let lower = base.to_lowercase();
+        if lower.ends_with(".zip") || lower.ends_with(".lua") || lower.ends_with(".manifest") {
+            match fs::read(Path::new(path)) {
+                Ok(data) => items.push((base, data)),
+                Err(_) => unread += 1,
+            }
+        } else {
+            unread += 1;
+        }
+    }
+    let mut report = build_report(&app, &steam_path, items)?;
+    report.skipped += unread;
+    Ok(report)
+}
+
+#[tauri::command]
+pub async fn install_manifest_blob(
+    app: AppHandle,
+    steam_path: String,
+    name: String,
+    data: Vec<u8>,
+) -> Result<InstallReport, String> {
+    build_report(&app, &steam_path, vec![(name, data)])
 }

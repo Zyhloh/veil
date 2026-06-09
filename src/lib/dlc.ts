@@ -37,9 +37,13 @@ export function useReleasedDlc(appId: number, gridDlcIds: number[], enabled = tr
     if (!enabled) return
     let alive = true
     ;(async () => {
-      const details = await catalogDetails(appId).catch(() => null)
+      const [details, mainMetas] = await Promise.all([
+        catalogDetails(appId).catch(() => null),
+        getAppsMeta([appId]).catch(() => [] as AppMeta[]),
+      ])
       const union = new Set<number>(gridKey ? gridKey.split(',').map(Number) : [])
       details?.dlc_app_ids.forEach((id) => union.add(id))
+      mainMetas[0]?.dlc_app_ids.forEach((id) => union.add(id))
       const ids = [...union]
       const metas = await getAppsMeta(ids).catch(() => [] as AppMeta[])
       if (!alive) return

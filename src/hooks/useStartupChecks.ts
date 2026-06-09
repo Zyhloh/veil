@@ -15,7 +15,6 @@ export function useStartupChecks(ready: boolean, onComplete: () => void) {
     }
   }, [])
 
-  // Gentle drift so the bar never looks frozen before the first event lands.
   useEffect(() => {
     if (ready) return
     const t = setInterval(() => setProgress((p) => (p < 90 ? p + 0.5 : p)), 400)

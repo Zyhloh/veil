@@ -78,7 +78,6 @@ function BypassCard({
 
   useEffect(() => {
     if (inView) onVisible()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inView])
 
   const state = status?.state

@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { invoke } from '@tauri-apps/api/core'
 import SteamControl from './SteamControl'
 import Toast from './Toast'
+import ProcessingModal from './ProcessingModal'
+import DropResultModal from './DropResultModal'
 import LibraryPage from '../pages/LibraryPage'
 import CatalogPage from '../pages/CatalogPage'
 import FixesPage from '../pages/FixesPage'
@@ -119,7 +120,9 @@ export default function MainShell() {
   const [dragOver, setDragOver] = useState(false)
   const [version, setVersion] = useState('')
   const maximized = useMaximized()
-  const { importPaths, restartRequired, updateInfo } = useInstaller()
+  const { importFiles, importText, processing, dropResult, clearDropResult, restartRequired, updateInfo } =
+    useInstaller()
+  const dragDepth = useRef(0)
 
   useEffect(() => {
     invoke<string>('app_version').then(setVersion).catch(() => {})
@@ -130,21 +133,52 @@ export default function MainShell() {
   }
 
   useEffect(() => {
-    const unlisten = getCurrentWebview().onDragDropEvent((event) => {
-      const payload = event.payload
-      if (payload.type === 'enter' || payload.type === 'over') {
-        setDragOver(true)
-      } else if (payload.type === 'drop') {
-        setDragOver(false)
-        if (payload.paths.length > 0) importPaths(payload.paths)
-      } else {
+    const onEnter = (e: DragEvent) => {
+      e.preventDefault()
+      dragDepth.current += 1
+      setDragOver(true)
+    }
+    const onOver = (e: DragEvent) => {
+      e.preventDefault()
+    }
+    const onLeave = (e: DragEvent) => {
+      e.preventDefault()
+      dragDepth.current -= 1
+      if (dragDepth.current <= 0) {
+        dragDepth.current = 0
         setDragOver(false)
       }
-    })
-    return () => {
-      unlisten.then((fn) => fn())
     }
-  }, [importPaths])
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault()
+      dragDepth.current = 0
+      setDragOver(false)
+      const dt = e.dataTransfer
+      if (!dt) return
+
+      const files = dt.files ? Array.from(dt.files) : []
+      const manifestFiles = files.filter((f) => /\.(zip|lua|manifest)$/i.test(f.name))
+      const text = (dt.getData('text/uri-list') || dt.getData('text/plain') || dt.getData('text') || '').trim()
+
+      if (manifestFiles.length > 0) {
+        importFiles(manifestFiles)
+      } else if (text && /\d{3,}/.test(text)) {
+        importText(text)
+      } else if (files.length > 0) {
+        importFiles(files)
+      }
+    }
+    window.addEventListener('dragenter', onEnter)
+    window.addEventListener('dragover', onOver)
+    window.addEventListener('dragleave', onLeave)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragenter', onEnter)
+      window.removeEventListener('dragover', onOver)
+      window.removeEventListener('dragleave', onLeave)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [importFiles, importText])
 
   const current = [...flatItems, settings].find((i) => i.id === active) ?? flatItems[0]
 
@@ -267,11 +301,16 @@ export default function MainShell() {
               </div>
               <div className="text-center">
                 <p className="text-[14px] font-bold text-neutral-200">Drop to install</p>
-                <p className="mt-1 text-[12px] text-neutral-500">.zip, .lua, or .manifest</p>
+                <p className="mt-1 text-[12px] text-neutral-500">.zip, .lua, .manifest, or SteamDB links</p>
               </div>
             </div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>{processing && <ProcessingModal label={processing.label} />}</AnimatePresence>
+      <AnimatePresence>
+        {dropResult && <DropResultModal result={dropResult} onClose={clearDropResult} />}
       </AnimatePresence>
 
       <Toast />

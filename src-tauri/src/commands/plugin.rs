@@ -2,9 +2,6 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-// Installed luas are written to both folders: the loader DLL reads "Veil", and
-// "stplug-in" is kept populated for compatibility. The DLL mirrors between them
-// on startup, so the app only writes/deletes — it never compares or copies.
 const FOLDERS: [&str; 2] = ["Veil", "stplug-in"];
 
 pub fn dirs(steam_path: &str) -> [PathBuf; 2] {
@@ -12,7 +9,6 @@ pub fn dirs(steam_path: &str) -> [PathBuf; 2] {
     [cfg.join(FOLDERS[0]), cfg.join(FOLDERS[1])]
 }
 
-/// The folder used for "open plugin folder" and as the primary loader folder.
 pub fn primary_dir(steam_path: &str) -> PathBuf {
     Path::new(steam_path).join("config").join(FOLDERS[0])
 }
@@ -27,7 +23,6 @@ fn unset_readonly(path: &Path) {
     }
 }
 
-/// Write a file by name into every plugin folder.
 pub fn write_to_all(steam_path: &str, name: &str, data: &[u8]) -> std::io::Result<()> {
     let mut result = Ok(());
     for d in dirs(steam_path) {
@@ -41,7 +36,6 @@ pub fn write_to_all(steam_path: &str, name: &str, data: &[u8]) -> std::io::Resul
     result
 }
 
-/// Delete `<app_id>.lua` from every plugin folder.
 pub fn remove_lua(steam_path: &str, app_id: &str) {
     let name = format!("{}.lua", app_id);
     for d in dirs(steam_path) {
@@ -53,7 +47,6 @@ pub fn remove_lua(steam_path: &str, app_id: &str) {
     }
 }
 
-/// Read `<app_id>.lua` from whichever folder has it.
 pub fn read_lua(steam_path: &str, app_id: &str) -> Option<String> {
     let name = format!("{}.lua", app_id);
     for d in dirs(steam_path) {
@@ -64,7 +57,6 @@ pub fn read_lua(steam_path: &str, app_id: &str) -> Option<String> {
     None
 }
 
-/// Distinct `*.lua` filenames present across all plugin folders.
 pub fn lua_names(steam_path: &str) -> Vec<String> {
     let mut set = BTreeSet::new();
     for d in dirs(steam_path) {

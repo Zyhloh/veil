@@ -22,7 +22,6 @@ fn log_path(steam_path: &str) -> PathBuf {
     Path::new(steam_path).join(LOG_NAME)
 }
 
-/// %AppData%/CloudRedirect/config.json — the location the injected DLL reads.
 fn cloud_config_path() -> Result<PathBuf, String> {
     let dir = dirs::config_dir()
         .ok_or("Could not resolve %AppData%")?
@@ -108,9 +107,6 @@ async fn download_dll(hashes: Option<&HashMap<String, String>>) -> Result<Vec<u8
     Ok(data)
 }
 
-/// Ensure cloud_redirect.dll is present and current. Downloads only when missing
-/// or hash-mismatched. Best-effort: a locked file (Steam running) keeps the
-/// existing copy rather than forcing a shutdown.
 async fn ensure_dll(steam_path: &str) -> Result<(), String> {
     let dest = dll_path(steam_path);
     let hashes = fetch_remote_hashes().await;
@@ -118,17 +114,16 @@ async fn ensure_dll(steam_path: &str) -> Result<(), String> {
     if dest.exists() {
         match (hashes.as_ref().and_then(|h| h.get(DLL_NAME)), file_sha256(&dest)) {
             (Some(expected), Some(actual)) if actual.eq_ignore_ascii_case(expected) => return Ok(()),
-            (Some(_), _) => {} // mismatch -> update below
-            _ => return Ok(()),  // no reference hash / offline -> keep existing
+            (Some(_), _) => {}
+            _ => return Ok(()),
         }
     }
 
     let data = download_dll(hashes.as_ref()).await?;
-    let _ = write_file(&dest, &data); // best-effort; locked copy updates next launch
+    let _ = write_file(&dest, &data);
     Ok(())
 }
 
-/// Write the DLL, closing Steam if a loaded copy blocks the overwrite.
 async fn write_dll_forced(steam_path: &str, data: &[u8]) -> Result<(), String> {
     let dest = dll_path(steam_path);
     if write_file(&dest, data).is_err() {
@@ -160,7 +155,6 @@ fn current_folder(steam_path: &str) -> String {
         .unwrap_or_else(|| default_folder(steam_path))
 }
 
-/// Set provider=folder + sync_path, preserving other keys.
 fn write_folder_config(folder: &str) -> Result<(), String> {
     let path = cloud_config_path()?;
     let mut obj = read_config();
@@ -170,9 +164,6 @@ fn write_folder_config(folder: &str) -> Result<(), String> {
     fs::write(&path, json).map_err(|e| format!("Failed to write config: {}", e))
 }
 
-/// Reconcile the on-disk log block to match the preference. When logging is off
-/// we occupy the log path with a directory so the DLL's append-open fails and
-/// every log line is silently dropped. Best-effort (a locked log applies later).
 fn apply_log_pref(steam_path: &str, log_enabled: bool) {
     let p = log_path(steam_path);
     if log_enabled {
@@ -182,7 +173,7 @@ fn apply_log_pref(steam_path: &str, log_enabled: bool) {
         return;
     }
     if p.is_dir() {
-        return; // already blocked
+        return;
     }
     let old = Path::new(steam_path).join("cloud_redirect.log.old");
     if old.exists() {
@@ -192,7 +183,7 @@ fn apply_log_pref(steam_path: &str, log_enabled: bool) {
     if p.exists() {
         clear_readonly(&p);
         if fs::remove_file(&p).is_err() {
-            return; // log held open by running Steam; applies on next launch
+            return;
         }
     }
     let _ = fs::create_dir(&p);
@@ -212,8 +203,6 @@ fn set_log_pref(enabled: bool) {
     }
 }
 
-/// Remove cloud_redirect.dll so the Veil loader stops loading it. Closes Steam
-/// if a loaded copy blocks deletion.
 async fn remove_dll_forced(steam_path: &str) {
     let dest = dll_path(steam_path);
     if !dest.exists() {
@@ -230,7 +219,6 @@ async fn remove_dll_forced(steam_path: &str) {
     }
 }
 
-/// Write the folder config only when it differs, to avoid needless rewrites.
 fn ensure_folder_config(folder: &str) {
     let cfg = read_config();
     let same = cfg.get("provider").and_then(|v| v.as_str()) == Some("folder")
@@ -263,10 +251,6 @@ pub fn cloud_saves_status(steam_path: String) -> Result<CloudSavesStatus, String
     Ok(build_status(&steam_path))
 }
 
-/// Startup reconcile: when cloud saves are on, keep cloud_redirect.dll present
-/// and current and the config in sync. The Veil loader DLLs detect the file and
-/// load it into Steam, so the app only deploys it — no payload patching.
-/// Resilient: never hard-fails startup.
 #[tauri::command]
 pub async fn cloud_saves_ensure(steam_path: String) -> Result<CloudSavesStatus, String> {
     let cfg = get_app_config().unwrap_or_default();
@@ -296,7 +280,6 @@ pub async fn cloud_saves_enable(steam_path: String, folder: String) -> Result<Cl
     fs::create_dir_all(&target).map_err(|e| format!("Failed to create folder: {}", e))?;
     write_folder_config(&target)?;
 
-    // Deploy cloud_redirect.dll into the Steam dir; the Veil loader loads it.
     let hashes = fetch_remote_hashes().await;
     let data = download_dll(hashes.as_ref()).await?;
     write_dll_forced(&steam_path, &data).await?;
@@ -381,7 +364,6 @@ fn zip_dir(src: &Path, dest: &Path) -> Result<u32, String> {
     Ok(count)
 }
 
-/// Zip the entire cloud saves folder onto the user's desktop. Returns the path.
 #[tauri::command]
 pub fn cloud_saves_backup(steam_path: String) -> Result<String, String> {
     let src = PathBuf::from(current_folder(&steam_path));
@@ -407,7 +389,6 @@ pub fn cloud_saves_backup(steam_path: String) -> Result<String, String> {
     Ok(dest.to_string_lossy().to_string())
 }
 
-/// Extract a saves zip into the cloud saves folder. Returns files imported.
 #[tauri::command]
 pub fn cloud_saves_import(steam_path: String, zip_path: String) -> Result<u32, String> {
     let dest_root = PathBuf::from(current_folder(&steam_path));
@@ -419,7 +400,6 @@ pub fn cloud_saves_import(steam_path: String, zip_path: String) -> Result<u32, S
     let mut count = 0u32;
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| format!("Zip entry error: {}", e))?;
-        // enclosed_name rejects absolute paths and `..` traversal.
         let Some(rel) = entry.enclosed_name() else { continue };
         let out = dest_root.join(rel.to_path_buf());
         if entry.is_dir() {

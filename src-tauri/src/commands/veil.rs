@@ -26,8 +26,6 @@ struct DllTarget {
     name: &'static str,
     path: PathBuf,
     url: &'static str,
-    // Best-effort: a download/repair failure for this DLL is non-fatal (e.g. the
-    // endpoint may not serve it yet).
     optional: bool,
 }
 

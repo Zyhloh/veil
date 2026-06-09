@@ -56,7 +56,7 @@ fn meta_cache_dir() -> PathBuf {
     let dir = dirs::cache_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("Veil")
-        .join("appmeta");
+        .join("appmeta2");
     fs::create_dir_all(&dir).ok();
     dir
 }
@@ -194,14 +194,15 @@ fn parse_meta(app_id: u32, json: &serde_json::Value) -> AppMeta {
         meta.name = common["name"].as_str().unwrap_or(&meta.name).to_string();
     }
 
+    if let Some(kind) = common["type"].as_str() {
+        meta.kind = kind.to_lowercase();
+    }
+
     let state = common["releasestate"].as_str().unwrap_or("released");
     let unreleased = matches!(state, "prerelease" | "preloadonly" | "disabled");
     let release_ts = release_timestamp(common);
     let out_now = release_ts != 0 && release_ts <= now_secs();
-    meta.released = has_name && !unreleased && out_now;
-    if let Some(kind) = common["type"].as_str() {
-        meta.kind = kind.to_lowercase();
-    }
+    meta.released = has_name && !unreleased && (out_now || meta.kind == "dlc");
 
     let hash = common["header_image"]["english"]
         .as_str()

@@ -28,10 +28,6 @@ impl Default for AppConfig {
 
 const DUMP_DIR_NAME: &str = "Veil Dumps";
 
-/// A directory is usable if it already exists, or if its parent exists and we can
-/// create it. The parent check is deliberate: a path whose base is gone (e.g. a
-/// Documents folder that was relocated to another drive) is rejected rather than
-/// resurrected, so we never write to or display a dead location.
 fn usable_dir(path: &Path) -> bool {
     if path.is_dir() {
         return true;
@@ -39,9 +35,6 @@ fn usable_dir(path: &Path) -> bool {
     matches!(path.parent(), Some(parent) if parent.is_dir()) && fs::create_dir_all(path).is_ok()
 }
 
-/// Resolves the dump base directory to one that is guaranteed to exist. Tries the
-/// preferred (configured) path first, then Documents, then %user%, then %temp%,
-/// creating the folder where needed. Falls back to the temp dir as a last resort.
 fn resolve_dump_dir(preferred: Option<PathBuf>) -> PathBuf {
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Some(p) = preferred.filter(|p| !p.as_os_str().is_empty()) {
@@ -109,9 +102,6 @@ pub fn get_app_config() -> Result<AppConfig, String> {
 
     let mut dirty = false;
 
-    // Drop a stored dump path that no longer resolves to a real, creatable location
-    // (e.g. a relocated Documents folder) so it falls back to the default and the UI
-    // never shows or uses a dead path. A path the user picked that still works is kept.
     if !config.dump_path.is_empty() && !usable_dir(Path::new(&config.dump_path)) {
         config.dump_path = String::new();
         dirty = true;

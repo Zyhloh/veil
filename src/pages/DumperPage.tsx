@@ -148,7 +148,6 @@ export default function DumperPage() {
           try {
             localStorage.setItem(TOKEN_KEY, result.refresh_token)
           } catch {
-            /* ignore */
           }
         }
         await afterLogin()
@@ -158,7 +157,6 @@ export default function DumperPage() {
           try {
             localStorage.removeItem(TOKEN_KEY)
           } catch {
-            /* ignore */
           }
           setPhase('logged-out')
         } else {
@@ -219,7 +217,6 @@ export default function DumperPage() {
     try {
       localStorage.removeItem(TOKEN_KEY)
     } catch {
-      /* ignore */
     }
     setPhase('logged-out')
     setProfile(null)
@@ -253,7 +250,6 @@ export default function DumperPage() {
     return games.filter((g) => g.name.toLowerCase().includes(q) || String(g.app_id).includes(q))
   }, [games, query])
 
-  // ---- Login / 2FA views ----
   if (phase !== 'logged-in') {
     return (
       <div className="flex h-full items-center justify-center px-10 py-8">
@@ -346,7 +342,6 @@ export default function DumperPage() {
     )
   }
 
-  // ---- Logged-in view ----
   return (
     <div className="flex h-full flex-col px-10 py-8">
       <div className="mb-5 flex shrink-0 items-center gap-3">

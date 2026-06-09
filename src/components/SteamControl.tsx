@@ -27,7 +27,6 @@ export default function SteamControl() {
       setRunning(r)
       if (!r) setRestartRequired(false)
     } catch {
-      /* ignore */
     }
   }, [setRestartRequired])
 

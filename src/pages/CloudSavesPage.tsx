@@ -64,7 +64,6 @@ export default function CloudSavesPage() {
   const [importBusy, setImportBusy] = useState(false)
   const [confirmEnable, setConfirmEnable] = useState(false)
 
-  // Status is prefetched at startup; refresh only if it never loaded.
   useEffect(() => {
     if (!cloudStatus) refreshCloud()
   }, [cloudStatus, refreshCloud])

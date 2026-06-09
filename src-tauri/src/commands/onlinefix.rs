@@ -9,13 +9,12 @@ const SEARCH_URL: &str = "https://online-fix.me/engine/ajax/search.php";
 const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36";
 const LINK_PREFIX: &str = "https://online-fix.me/games/";
 
-// Re-check cadence: a found fix rarely disappears; a missing one may appear later.
 const AVAIL_TTL: u64 = 30 * 24 * 3600;
 const UNAVAIL_TTL: u64 = 5 * 24 * 3600;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct OnlineFixEntry {
-    pub status: String, // "available" | "unavailable"
+    pub status: String,
     pub url: Option<String>,
     pub checked_at: u64,
 }
@@ -76,7 +75,6 @@ fn form_encode(s: &str) -> String {
     out
 }
 
-/// A Cloudflare/anti-bot interstitial rather than a real search response.
 fn looks_blocked(status: u16, body: &str) -> bool {
     if status != 200 {
         return true;
@@ -88,8 +86,6 @@ fn looks_blocked(status: u16, body: &str) -> bool {
         || b.contains("/cdn-cgi/challenge")
 }
 
-/// Find the first /games/ result whose URL slug matches the app name. The slug is
-/// ASCII even though the visible titles are Cyrillic, so matching stays reliable.
 fn match_link(body: &str, name: &str) -> Option<String> {
     let name_n = norm(name);
     if name_n.len() < 2 {
@@ -98,7 +94,6 @@ fn match_link(body: &str, name: &str) -> Option<String> {
     let mut search_from = 0usize;
     while let Some(rel) = body[search_from..].find(LINK_PREFIX) {
         let start = search_from + rel;
-        // The URL begins at `start` and runs to the next quote.
         let tail = &body[start..];
         let end = tail.find('"').unwrap_or(tail.len());
         let url = &tail[..end];
@@ -109,7 +104,6 @@ fn match_link(body: &str, name: &str) -> Option<String> {
         }
         if let Some(seg) = url.rsplit('/').next() {
             let slug = seg.trim_end_matches(".html");
-            // strip the leading "<id>-" prefix online-fix prepends
             let slug = slug.splitn(2, '-').nth(1).unwrap_or(slug);
             if norm(slug).contains(&name_n) {
                 return Some(url.to_string());
