@@ -14,9 +14,10 @@ use winreg::RegKey;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 const VEIL_URL: &str = "https://app.projectveil.cc/dll/Veil.dll";
-const DWMAPI_URL: &str = "https://app.projectveil.cc/dll/dwmapi.dll";
-const XINPUT_URL: &str = "https://app.projectveil.cc/dll/xinput1_4.dll";
+const VERSION_URL: &str = "https://app.projectveil.cc/dll/version.dll";
 const HASHES_URL: &str = "https://app.projectveil.cc/dll/hashes";
+
+const LEGACY_DLLS: &[&str] = &["dwmapi.dll", "xinput1_4.dll"];
 
 const BUNDLED_PACKCODE: &[u8] = include_bytes!("../../resources/packcode.vdf");
 const BUNDLED_VERSION: &[u8] = include_bytes!("../../resources/version");
@@ -34,13 +35,28 @@ struct BundledFile {
     data: &'static [u8],
 }
 
-fn dll_targets(steam_path: &str) -> [DllTarget; 3] {
+fn dll_targets(steam_path: &str) -> [DllTarget; 2] {
     let steam = Path::new(steam_path);
     [
-        DllTarget { name: "dwmapi.dll", path: steam.join("dwmapi.dll"), url: DWMAPI_URL, optional: false },
         DllTarget { name: "Veil.dll", path: steam.join("Veil.dll"), url: VEIL_URL, optional: false },
-        DllTarget { name: "xinput1_4.dll", path: steam.join("xinput1_4.dll"), url: XINPUT_URL, optional: true },
+        DllTarget { name: "version.dll", path: steam.join("version.dll"), url: VERSION_URL, optional: false },
     ]
+}
+
+fn legacy_dlls_present(steam_path: &str) -> bool {
+    let steam = Path::new(steam_path);
+    LEGACY_DLLS.iter().any(|n| steam.join(n).exists())
+}
+
+fn cleanup_legacy_dlls(steam_path: &str) {
+    let steam = Path::new(steam_path);
+    for name in LEGACY_DLLS {
+        let p = steam.join(name);
+        if p.exists() {
+            clear_readonly(&p);
+            let _ = fs::remove_file(&p);
+        }
+    }
 }
 
 fn bundled_files(steam_path: &str) -> [BundledFile; 2] {
@@ -220,7 +236,7 @@ pub async fn verify_veil_dll(steam_path: String) -> Result<VerifyResult, String>
     let remote = fetch_remote_hashes().await;
     let (bad, missing, mismatched) = audit_dlls(&targets, remote.as_ref());
     Ok(VerifyResult {
-        ok: bad.is_empty(),
+        ok: bad.is_empty() && !legacy_dlls_present(&steam_path),
         missing,
         stale: mismatched,
         steam_running: is_steam_running(),
@@ -238,14 +254,18 @@ pub async fn ensure_veil_dll(steam_path: String) -> Result<String, String> {
     let appcache_missing: Vec<&BundledFile> = bundled.iter().filter(|f| !f.path.exists()).collect();
     let payload_deployed = deploy_payload_cache(&steam_path).unwrap_or(false);
 
-    if bad_indices.is_empty() && appcache_missing.is_empty() {
+    cleanup_legacy_dlls(&steam_path);
+    let legacy_remaining = legacy_dlls_present(&steam_path);
+
+    if bad_indices.is_empty() && appcache_missing.is_empty() && !legacy_remaining {
         set_unlock_registry()?;
         return Ok(if payload_deployed { "installed" } else { "already_installed" }.to_string());
     }
 
-    let killed_steam = if !bad_indices.is_empty() && is_steam_running() {
+    let killed_steam = if (!bad_indices.is_empty() || legacy_remaining) && is_steam_running() {
         kill_steam_processes();
         wait_for_steam_exit();
+        cleanup_legacy_dlls(&steam_path);
         true
     } else {
         false
@@ -307,7 +327,7 @@ pub fn remove_veil_dll(steam_path: String) -> Result<String, String> {
         .chain(bundled.iter().map(|f| f.path.clone()))
         .collect();
 
-    if !all_paths.iter().any(|p| p.exists()) {
+    if !all_paths.iter().any(|p| p.exists()) && !legacy_dlls_present(&steam_path) {
         remove_unlock_registry()?;
         return Ok("not_installed".to_string());
     }
@@ -323,6 +343,7 @@ pub fn remove_veil_dll(steam_path: String) -> Result<String, String> {
             let _ = fs::remove_file(p);
         }
     }
+    cleanup_legacy_dlls(&steam_path);
 
     remove_unlock_registry()?;
     Ok("removed".to_string())
